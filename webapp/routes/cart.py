@@ -94,6 +94,7 @@ async def add_item(
     await repo.add_item(cart, body.variant_id, body.quantity)
 
     # Reload
+    session.expire_all()
     cart = await repo.get_by_user_id(user.id)
     return await _build_cart_schema(cart, session)
 
@@ -112,6 +113,7 @@ async def update_item(
         raise HTTPException(status_code=404, detail="Cart not found")
 
     await repo.set_item_quantity(cart.id, item_id, body.quantity)
+    session.expire_all()
     cart = await repo.get_by_user_id(user.id)
     return await _build_cart_schema(cart, session)
 
@@ -129,6 +131,7 @@ async def remove_item(
         raise HTTPException(status_code=404, detail="Cart not found")
 
     await repo.remove_item(cart.id, item_id)
+    session.expire_all()
     cart = await repo.get_by_user_id(user.id)
     return await _build_cart_schema(cart, session)
 

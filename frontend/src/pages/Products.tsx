@@ -14,6 +14,7 @@ export default function Products() {
   const lang = 'ru';
 
   const PAGE_SIZE = 20;
+  const locationIdNumber = locationId ? Number(locationId) : undefined;
 
   useEffect(() => {
     api.catalog.categories().then(setCategories);
@@ -21,13 +22,13 @@ export default function Products() {
 
   useEffect(() => {
     setLoading(true);
-    api.catalog.products({ category_id: activeCat, page })
+    api.catalog.products({ category_id: activeCat, location_id: locationIdNumber, page })
       .then((data) => {
         setProducts(data);
         setHasMore(data.length === PAGE_SIZE);
         setLoading(false);
       });
-  }, [activeCat, page]);
+  }, [activeCat, page, locationIdNumber]);
 
   const getName = (p: Product) =>
     lang === 'ru' ? p.name_ru : lang === 'pl' ? p.name_pl : p.name_uk;
@@ -74,7 +75,10 @@ export default function Products() {
           {products.map((product) => (
             <div
               key={product.id}
-              onClick={() => navigate(`/products/${product.id}`, { state: { locationId } })}
+              onClick={() => navigate(
+                `/products/${product.id}${locationId ? `?location_id=${locationId}` : ''}`,
+                { state: { locationId } },
+              )}
               style={{
                 background: 'var(--surface)',
                 borderRadius: 'var(--radius)',

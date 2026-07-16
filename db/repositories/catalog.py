@@ -129,15 +129,28 @@ class CatalogRepository:
     async def get_products(
         self,
         category_id: int | None = None,
+        location_id: int | None = None,
         page: int = 0,
         page_size: int = 5,
     ) -> list[Product]:
-        q = select(Product).where(Product.is_active == True)
+        q = select(Product).where(Product.is_active == True).options(
+            selectinload(Product.variants).selectinload(ProductVariant.stock_items)
+        )
         if category_id is not None:
             q = q.where(Product.category_id == category_id)
+        if location_id is not None:
+            q = (
+                q.join(ProductVariant, ProductVariant.product_id == Product.id)
+                .join(LocationStock, LocationStock.variant_id == ProductVariant.id)
+                .where(
+                    LocationStock.location_id == location_id,
+                    LocationStock.quantity > 0,
+                )
+                .distinct()
+            )
         q = q.order_by(Product.id).offset(page * page_size).limit(page_size)
         result = await self.session.execute(q)
-        return list(result.scalars().all())
+        return list(result.scalars().unique().all())
 
     async def count_products(self, category_id: int | None = None) -> int:
         q = select(func.count()).select_from(Product).where(Product.is_active == True)
@@ -150,7 +163,7 @@ class CatalogRepository:
         result = await self.session.execute(
             select(Product)
             .where(Product.id == product_id)
-            .options(selectinload(Product.variants))
+            .options(selectinload(Product.variants).selectinload(ProductVariant.stock_items))
         )
         return result.scalar_one_or_none()
 

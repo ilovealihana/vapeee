@@ -170,13 +170,19 @@ export const api = {
     locations: (cityId: number) => request<Location[]>(`/api/cities/${cityId}/locations`),
     location: (id: number) => request<Location>(`/api/locations/${id}`),
     categories: () => request<Category[]>('/api/categories'),
-    products: (params?: { category_id?: number; page?: number }) => {
+    products: (params?: { category_id?: number; location_id?: number; page?: number }) => {
       const q = new URLSearchParams();
       if (params?.category_id) q.set('category_id', String(params.category_id));
+      if (params?.location_id) q.set('location_id', String(params.location_id));
       if (params?.page) q.set('page', String(params.page));
       return request<Product[]>(`/api/products?${q}`);
     },
-    product: (id: number) => request<Product>(`/api/products/${id}`),
+    product: (id: number, params?: { location_id?: number }) => {
+      const q = new URLSearchParams();
+      if (params?.location_id) q.set('location_id', String(params.location_id));
+      const suffix = q.toString() ? `?${q}` : '';
+      return request<Product>(`/api/products/${id}${suffix}`);
+    },
   },
 
   cart: {

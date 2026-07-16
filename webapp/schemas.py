@@ -170,7 +170,7 @@ class OrderSchema(BaseModel):
 
 
 class CreateOrderRequest(BaseModel):
-    delivery_type: str          # "pickup" | "inpost"
+    delivery_type: str          # "pickup" | "door_delivery"
     customer_name: str
     customer_phone: str
     customer_email: str

@@ -21,6 +21,16 @@ from webapp.schemas import CreateOrderRequest, OrderSchema
 router = APIRouter(prefix="/api/orders", tags=["orders"])
 
 
+def delivery_cost_for_type(delivery_type: str, fixed_delivery_cost: Decimal) -> Decimal:
+    if delivery_type == "door_delivery":
+        return fixed_delivery_cost
+    return Decimal("0")
+
+
+def should_deduct_stock(delivery_type: str) -> bool:
+    return delivery_type in {"pickup", "door_delivery"}
+
+
 async def _get_user(authorization: str, session: AsyncSession):
     init_data = authorization[4:] if authorization.startswith("tma ") else authorization
     user_data = verify_init_data(init_data)
@@ -76,8 +86,15 @@ async def create_order(
             "price_at_order": price,
         })
 
-    delivery_cost = Decimal(str(settings.INPOST_DELIVERY_COST)) if body.delivery_type == "inpost" else Decimal("0")
+    delivery_cost = delivery_cost_for_type(
+        body.delivery_type,
+        Decimal(str(settings.INPOST_DELIVERY_COST)),
+    )
     total = products_total + delivery_cost
+    order_location_id = body.location_id or (cart.location_id if cart else None)
+
+    if should_deduct_stock(body.delivery_type) and not order_location_id:
+        raise HTTPException(status_code=400, detail="Location is required for this delivery type")
 
     # Parse scheduled datetime
     try:
@@ -99,20 +116,20 @@ async def create_order(
         delivery_cost=delivery_cost,
         total=total,
         payment_method=body.payment_method,
-        location_id=body.location_id or (cart.location_id if cart else None),
+        location_id=order_location_id,
         delivery_address=body.delivery_address,
         scheduled_at=scheduled_at,
         comment=body.comment,
     )
     await order_repo.add_items(order.id, order_items)
 
-    # Deduct stock for pickup orders
-    if body.delivery_type == "pickup" and cart.location_id:
+    # Deduct stock for orders fulfilled from a selected location.
+    if should_deduct_stock(body.delivery_type) and order_location_id:
         for item in cart.items:
             if item.variant_id:
                 result = await session.execute(
                     select(LocationStock).where(
-                        LocationStock.location_id == cart.location_id,
+                        LocationStock.location_id == order_location_id,
                         LocationStock.variant_id == item.variant_id,
                     )
                 )
@@ -151,7 +168,10 @@ async def _notify_admins(order, items, body: CreateOrderRequest, catalog, sessio
             name = variant.name_ru if variant else "?"
             item_lines.append(f"• {name} × {item['quantity']} = {float(item['price_at_order'] * item['quantity']):.2f} zł")
 
-        delivery_label = "InPost доставка" if body.delivery_type == "inpost" else "Самовывоз"
+        delivery_label = {
+            "pickup": "Самовывоз",
+            "door_delivery": "Доставка к двери",
+        }.get(body.delivery_type, body.delivery_type)
         comment = f"💬 {body.comment}" if body.comment else ""
         items_text = "\n".join(item_lines)
 

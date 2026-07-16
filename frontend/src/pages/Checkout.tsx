@@ -3,14 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { api, type CreateOrderRequest } from '../api/client';
 import { useCartStore } from '../store/cart';
 
-const STEPS = ['Доставка', 'Данные', 'Дата и время', 'Оплата'];
+const STEPS = ['Доставка', 'Контакты', 'Дата и время', 'Оплата'];
 const PAYMENT_METHODS = [
-  { id: 'cash', label: '💵 Наличные', desc: 'Оплата при получении' },
-  { id: 'blik', label: '📱 Blik', desc: 'Мобильный платёж' },
-  { id: 'monobank', label: '🇺🇦 Monobank', desc: 'Украинская карта' },
+  { id: 'cash', icon: '💵', label: 'Наличные', desc: 'Оплата при получении' },
+  { id: 'blik', icon: '⚡', label: 'Blik', desc: 'Быстрый перевод' },
+  { id: 'monobank', icon: '💳', label: 'Monobank', desc: 'Украинская карта' },
 ];
 
 const TIME_SLOTS = ['10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00'];
+const DOOR_DELIVERY_COST = 15;
 
 function buildCalendar(year: number, month: number) {
   const first = new Date(year, month, 1).getDay();
@@ -29,7 +30,7 @@ export default function Checkout() {
   const [error, setError] = useState('');
 
   const [form, setForm] = useState({
-    delivery_type: 'pickup' as 'pickup' | 'inpost',
+    delivery_type: 'pickup' as 'pickup' | 'door_delivery',
     customer_name: '',
     customer_phone: '',
     customer_email: '',
@@ -51,7 +52,7 @@ export default function Checkout() {
   const canNext = () => {
     if (step === 0) return !!form.delivery_type;
     if (step === 1) return form.customer_name && form.customer_phone && form.customer_email &&
-      (form.delivery_type !== 'inpost' || form.delivery_address);
+      (form.delivery_type !== 'door_delivery' || form.delivery_address);
     if (step === 2) return form.scheduled_date && form.scheduled_time;
     if (step === 3) return !!form.payment_method;
     return false;
@@ -67,7 +68,7 @@ export default function Checkout() {
         customer_name: form.customer_name,
         customer_phone: form.customer_phone,
         customer_email: form.customer_email,
-        delivery_address: form.delivery_type === 'inpost' ? form.delivery_address : undefined,
+        delivery_address: form.delivery_type === 'door_delivery' ? form.delivery_address : undefined,
         location_id: cart.location_id || undefined,
         scheduled_date: form.scheduled_date,
         scheduled_time: form.scheduled_time,
@@ -85,7 +86,7 @@ export default function Checkout() {
   };
 
   const cells = buildCalendar(calYear, calMonth);
-  const deliveryCost = form.delivery_type === 'inpost' ? 15 : 0;
+  const deliveryCost = form.delivery_type === 'door_delivery' ? DOOR_DELIVERY_COST : 0;
   const total = Number(cart?.total || 0) + deliveryCost;
 
   return (
@@ -95,7 +96,6 @@ export default function Checkout() {
         <h1 className="page-title">Оформление</h1>
       </div>
 
-      {/* Steps */}
       <div className="steps">
         {STEPS.map((_, i) => (
           <div key={i} className={`step-dot ${i === step ? 'active' : i < step ? 'done' : ''}`} />
@@ -106,18 +106,17 @@ export default function Checkout() {
       </div>
 
       <div className="container">
-        {/* Step 0: Delivery type */}
         {step === 0 && (
           <div>
-            <h2 style={{ fontWeight: 700, marginBottom: 16 }}>Как хочешь получить заказ?</h2>
+            <h2 style={{ fontWeight: 700, marginBottom: 16 }}>Как получить заказ?</h2>
             {[
-              { id: 'pickup', icon: '🏪', label: 'Самовывоз', desc: 'Забери из точки в своём городе' },
-              { id: 'inpost', icon: '📦', label: 'InPost доставка', desc: `+${deliveryCost} zł, доставка в постомат` },
+              { id: 'pickup', icon: '🏬', label: 'Самовывоз', desc: 'Забрать заказ в выбранной точке' },
+              { id: 'door_delivery', icon: '🚚', label: 'Доставка к двери', desc: `+${DOOR_DELIVERY_COST} zł, менеджер привезет товар по адресу` },
             ].map((opt) => (
               <div
                 key={opt.id}
                 className="card"
-                onClick={() => set('delivery_type', opt.id as any)}
+                onClick={() => set('delivery_type', opt.id)}
                 style={{
                   cursor: 'pointer',
                   border: `1.5px solid ${form.delivery_type === opt.id ? 'var(--accent)' : 'var(--border)'}`,
@@ -136,13 +135,12 @@ export default function Checkout() {
           </div>
         )}
 
-        {/* Step 1: Contact info */}
         {step === 1 && (
           <div>
             <h2 style={{ fontWeight: 700, marginBottom: 16 }}>Контактные данные</h2>
             <div className="input-group">
               <label className="input-label">Имя *</label>
-              <input className="input" placeholder="Иван" value={form.customer_name} onChange={e => set('customer_name', e.target.value)} />
+              <input className="input" placeholder="Алексей" value={form.customer_name} onChange={e => set('customer_name', e.target.value)} />
             </div>
             <div className="input-group">
               <label className="input-label">Телефон *</label>
@@ -152,21 +150,19 @@ export default function Checkout() {
               <label className="input-label">Email *</label>
               <input className="input" placeholder="you@example.com" value={form.customer_email} onChange={e => set('customer_email', e.target.value)} type="email" />
             </div>
-            {form.delivery_type === 'inpost' && (
+            {form.delivery_type === 'door_delivery' && (
               <div className="input-group">
                 <label className="input-label">Адрес доставки *</label>
-                <input className="input" placeholder="ул. Примерная 1, кв. 5, Вроцлав" value={form.delivery_address} onChange={e => set('delivery_address', e.target.value)} />
+                <input className="input" placeholder="ul. Przykladowa 1, m. 5, Wroclaw" value={form.delivery_address} onChange={e => set('delivery_address', e.target.value)} />
               </div>
             )}
           </div>
         )}
 
-        {/* Step 2: Date & time */}
         {step === 2 && (
           <div>
             <h2 style={{ fontWeight: 700, marginBottom: 16 }}>Дата и время</h2>
 
-            {/* Calendar */}
             <div className="card" style={{ marginBottom: 16 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                 <button onClick={() => { if (calMonth === 0) { setCalMonth(11); setCalYear(y => y - 1); } else setCalMonth(m => m - 1); }}
@@ -199,7 +195,6 @@ export default function Checkout() {
               </div>
             </div>
 
-            {/* Time slots */}
             {form.scheduled_date && (
               <div>
                 <div style={{ fontWeight: 700, marginBottom: 10 }}>Время:</div>
@@ -223,12 +218,10 @@ export default function Checkout() {
           </div>
         )}
 
-        {/* Step 3: Payment + summary */}
         {step === 3 && (
           <div>
-            {/* Order summary */}
             <div className="card" style={{ marginBottom: 16, background: 'rgba(124,58,237,0.08)', border: '1px solid rgba(124,58,237,0.2)' }}>
-              <div style={{ fontWeight: 700, marginBottom: 8 }}>📋 Сводка заказа</div>
+              <div style={{ fontWeight: 700, marginBottom: 8 }}>Итог заказа</div>
               {cart?.items.map(item => (
                 <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 14 }}>
                   <span style={{ color: 'var(--text-muted)' }}>
@@ -251,12 +244,11 @@ export default function Checkout() {
               </div>
             </div>
 
-            {/* Comment */}
             <div className="input-group">
-              <label className="input-label">Комментарий (необязательно)</label>
+              <label className="input-label">Комментарий</label>
               <textarea
                 className="input"
-                placeholder="Например: позвоните за 30 минут"
+                placeholder="Например: позвонить за 30 минут"
                 value={form.comment}
                 onChange={e => set('comment', e.target.value)}
                 rows={3}
@@ -264,7 +256,6 @@ export default function Checkout() {
               />
             </div>
 
-            {/* Payment */}
             <div style={{ fontWeight: 700, marginBottom: 10 }}>Способ оплаты:</div>
             {PAYMENT_METHODS.map(pm => (
               <div
@@ -277,9 +268,9 @@ export default function Checkout() {
                   background: form.payment_method === pm.id ? 'rgba(124,58,237,0.08)' : 'var(--surface)',
                 }}
               >
-                <span style={{ fontSize: 24 }}>{pm.label.split(' ')[0]}</span>
+                <span style={{ fontSize: 24 }}>{pm.icon}</span>
                 <div>
-                  <div style={{ fontWeight: 600 }}>{pm.label.slice(pm.label.indexOf(' ')+1)}</div>
+                  <div style={{ fontWeight: 600 }}>{pm.label}</div>
                   <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>{pm.desc}</div>
                 </div>
                 {form.payment_method === pm.id && <span style={{ marginLeft: 'auto', color: 'var(--accent)' }}>✓</span>}
@@ -294,12 +285,11 @@ export default function Checkout() {
               disabled={!canNext() || submitting}
               onClick={handleSubmit}
             >
-              {submitting ? '⏳ Оформляем...' : '✅ Подтвердить заказ'}
+              {submitting ? 'Оформляем...' : 'Подтвердить заказ'}
             </button>
           </div>
         )}
 
-        {/* Next button (steps 0-2) */}
         {step < 3 && (
           <button
             className="btn btn-primary"
@@ -307,7 +297,7 @@ export default function Checkout() {
             disabled={!canNext()}
             onClick={() => setStep(s => s + 1)}
           >
-            Далее →
+            Далее
           </button>
         )}
       </div>

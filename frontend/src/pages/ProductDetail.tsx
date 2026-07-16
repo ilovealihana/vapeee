@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api, type Product, type Variant } from '../api/client';
 import { useCartStore } from '../store/cart';
 
 export default function ProductDetail() {
   const { productId } = useParams<{ productId: string }>();
   const { state } = useLocation();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const locationId = state?.locationId;
+  const locationId = state?.locationId || searchParams.get('location_id') || undefined;
 
   const [product, setProduct] = useState<Product | null>(null);
   const [selectedVariant, setSelectedVariant] = useState<Variant | null>(null);
@@ -19,12 +20,15 @@ export default function ProductDetail() {
 
   useEffect(() => {
     if (productId) {
-      api.catalog.product(Number(productId)).then((p) => {
+      api.catalog.product(
+        Number(productId),
+        locationId ? { location_id: Number(locationId) } : undefined,
+      ).then((p) => {
         setProduct(p);
         if (p.variants.length === 1) setSelectedVariant(p.variants[0]);
       });
     }
-  }, [productId]);
+  }, [productId, locationId]);
 
   if (!product) return <div className="spinner" />;
 
@@ -45,6 +49,7 @@ export default function ProductDetail() {
     setAdding(true);
     try {
       await addItem(selectedVariant.id, qty, locationId ? Number(locationId) : undefined);
+      await useCartStore.getState().fetchCart();
       setAdded(true);
       window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
       setTimeout(() => setAdded(false), 2000);
