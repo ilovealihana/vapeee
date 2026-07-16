@@ -182,6 +182,95 @@ class CreateOrderRequest(BaseModel):
     comment: Optional[str] = None
 
 
+# ── Admin request schemas ─────────────────────────────────
+
+class CreateCityRequest(BaseModel):
+    name: str
+    slug: str
+    manager_tg_id: Optional[int] = None
+
+class UpdateCityRequest(BaseModel):
+    name: Optional[str] = None
+    slug: Optional[str] = None
+    manager_tg_id: Optional[int] = None
+    is_active: Optional[bool] = None
+
+class CreateLocationRequest(BaseModel):
+    name: str
+    address: str
+    description: Optional[str] = None
+    curator_tg_username: Optional[str] = None
+
+class UpdateLocationRequest(BaseModel):
+    name: Optional[str] = None
+    address: Optional[str] = None
+    description: Optional[str] = None
+    curator_tg_username: Optional[str] = None
+    is_active: Optional[bool] = None
+
+class CreateProductRequest(BaseModel):
+    name_ru: str
+    name_pl: str
+    name_uk: str
+    base_price: Decimal
+    category_id: Optional[int] = None
+    description_ru: Optional[str] = None
+    description_pl: Optional[str] = None
+    description_uk: Optional[str] = None
+
+class UpdateProductRequest(BaseModel):
+    name_ru: Optional[str] = None
+    name_pl: Optional[str] = None
+    name_uk: Optional[str] = None
+    base_price: Optional[Decimal] = None
+    category_id: Optional[int] = None
+    description_ru: Optional[str] = None
+    description_pl: Optional[str] = None
+    description_uk: Optional[str] = None
+    is_active: Optional[bool] = None
+
+class CreateVariantRequest(BaseModel):
+    name_ru: str
+    name_pl: str
+    name_uk: str
+    price_override: Optional[Decimal] = None
+
+class UpdateVariantRequest(BaseModel):
+    name_ru: Optional[str] = None
+    name_pl: Optional[str] = None
+    name_uk: Optional[str] = None
+    price_override: Optional[Decimal] = None
+
+class StockItem(BaseModel):
+    location_id: int
+    variant_id: int
+    quantity: int
+
+class UpdateStockRequest(BaseModel):
+    items: List[StockItem]
+
+class StockRow(BaseModel):
+    location_id: int
+    location_name: str
+    city_name: str
+    variant_id: int
+    variant_name: str
+    product_name: str
+    quantity: int
+
+class UpdateOrderStatusRequest(BaseModel):
+    status: str
+
+class AdminOrderSchema(OrderSchema):
+    customer_name: str
+    customer_phone: str
+    customer_email: str
+    location_name: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
 # ── Auth ──────────────────────────────────────────────────
 
 class AuthRequest(BaseModel):

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import os
-
 from aiogram import Router
 from aiogram.filters import CommandStart
 from aiogram.types import (
@@ -14,13 +12,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.keyboards.main_menu import main_menu_kb
 from bot.utils.i18n import get_translator
+from config import settings
 from db.repositories.cart import CartRepository
 from db.repositories.user import UserRepository
 
 router = Router(name="start")
-
-# URL фронтенда Mini App (задаётся через .env или переменную окружения)
-WEBAPP_URL = os.getenv("WEBAPP_URL", "https://your-vapeshop.vercel.app")
 
 
 def webapp_keyboard(locale: str) -> InlineKeyboardMarkup:
@@ -32,7 +28,7 @@ def webapp_keyboard(locale: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(
             text=labels.get(locale, "🛒 Открыть магазин"),
-            web_app=WebAppInfo(url=WEBAPP_URL),
+            web_app=WebAppInfo(url=settings.WEBAPP_URL),
         )
     ]])
 

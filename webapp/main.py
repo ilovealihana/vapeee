@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from webapp.routes import auth, catalog, cart, orders, user
+from webapp.routes import auth, catalog, cart, orders, user, admin
 
 
 @asynccontextmanager
@@ -41,6 +41,7 @@ app.include_router(user.router)
 app.include_router(catalog.router)
 app.include_router(cart.router)
 app.include_router(orders.router)
+app.include_router(admin.router)
 
 
 @app.get("/health")

@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { BrowserRouter, Route, Routes, Navigate } from 'react-router-dom';
+import { BrowserRouter, Route, Routes, Navigate, useLocation } from 'react-router-dom';
 import { useUserStore } from './store/user';
 import { useCartStore } from './store/cart';
 import BottomNav from './components/BottomNav';
@@ -12,6 +12,11 @@ import Cart from './pages/Cart';
 import Checkout from './pages/Checkout';
 import Profile from './pages/Profile';
 import OrderSuccess from './pages/OrderSuccess';
+import AdminLayout from './pages/admin/AdminLayout';
+import AdminCities from './pages/admin/AdminCities';
+import AdminProducts from './pages/admin/AdminProducts';
+import AdminStock from './pages/admin/AdminStock';
+import AdminOrders from './pages/admin/AdminOrders';
 import './index.css';
 
 // Expand Telegram WebApp to full screen
@@ -32,6 +37,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* User routes */}
         <Route path="/" element={<Home />} />
         <Route path="/cities" element={<Cities />} />
         <Route path="/cities/:cityId/locations" element={<Locations />} />
@@ -42,9 +48,27 @@ export default function App() {
         <Route path="/checkout" element={<Checkout />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/order-success/:orderId" element={<OrderSuccess />} />
+
+        {/* Admin routes — no BottomNav */}
+        <Route path="/admin" element={<AdminLayout />}>
+          <Route index element={<Navigate to="/admin/cities" replace />} />
+          <Route path="cities" element={<AdminCities />} />
+          <Route path="products" element={<AdminProducts />} />
+          <Route path="stock" element={<AdminStock />} />
+          <Route path="orders" element={<AdminOrders />} />
+        </Route>
+
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
-      <BottomNav />
+
+      {/* Hide bottom nav on admin pages */}
+      <BottomNavConditional />
     </BrowserRouter>
   );
+}
+
+function BottomNavConditional() {
+  const { pathname } = useLocation();
+  if (pathname.startsWith('/admin')) return null;
+  return <BottomNav />;
 }

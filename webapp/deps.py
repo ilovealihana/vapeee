@@ -62,3 +62,24 @@ async def get_user_with_session(
 ) -> tuple[User, AsyncSession]:
     user = await get_current_user(authorization=authorization, session=session)
     return user, session
+
+
+async def get_admin_user(
+    authorization: str = Header(...),
+    session: AsyncSession = Depends(get_session),
+) -> User:
+    """Validate that current user is an admin (tg_id in ADMIN_IDS)."""
+    from config import settings
+
+    user = await get_current_user(authorization=authorization, session=session)
+    if user.tg_id not in settings.ADMIN_IDS:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    return user
+
+
+async def get_admin_user_with_session(
+    authorization: str = Header(...),
+    session: AsyncSession = Depends(get_session),
+) -> tuple[User, AsyncSession]:
+    user = await get_admin_user(authorization=authorization, session=session)
+    return user, session

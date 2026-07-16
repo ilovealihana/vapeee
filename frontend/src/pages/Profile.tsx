@@ -1,6 +1,10 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useUserStore } from '../store/user';
 import { api, type Order } from '../api/client';
+
+const ADMIN_IDS = (import.meta.env.VITE_ADMIN_IDS || '823810588')
+  .split(',').map((s: string) => Number(s.trim()));
 
 const STATUS_LABELS: Record<string, string> = {
   new: '🆕 Новый',
@@ -17,7 +21,9 @@ const LANGS = [
 ];
 
 export default function Profile() {
+  const navigate = useNavigate();
   const { user, language, setLanguage } = useUserStore();
+  const isAdmin = user && ADMIN_IDS.includes(user.tg_id);
   const [orders, setOrders] = useState<Order[]>([]);
   const [tab, setTab] = useState<'profile' | 'orders' | 'language'>('profile');
   const [loadingOrders, setLoadingOrders] = useState(false);
@@ -79,6 +85,17 @@ export default function Profile() {
       </div>
 
       <div className="container" style={{ paddingTop: 16 }}>
+        {/* Admin button */}
+        {isAdmin && tab === 'profile' && (
+          <button
+            className="btn btn-primary"
+            style={{ marginBottom: 16, background: 'linear-gradient(135deg, var(--accent), var(--accent-2))' }}
+            onClick={() => navigate('/admin')}
+          >
+            🔧 Панель управления
+          </button>
+        )}
+
         {/* Profile tab */}
         {tab === 'profile' && (
           <div>

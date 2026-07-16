@@ -40,6 +40,9 @@ class Settings(BaseSettings):
     # Support
     SUPPORT_USERNAME: str = "support"
 
+    # Mini App WebApp URL
+    WEBAPP_URL: str = "https://frontend-vapebot.vercel.app"
+
     # Webhook (empty = polling)
     WEBHOOK_HOST: str = ""
     WEBHOOK_PATH: str = "/webhook"
