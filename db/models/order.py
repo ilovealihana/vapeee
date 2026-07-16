@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Numeric, String, Text, func
+from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from db.session import Base
@@ -12,12 +12,12 @@ from db.session import Base
 class Order(Base):
     __tablename__ = "orders"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
     location_id: Mapped[int | None] = mapped_column(
-        BigInteger, ForeignKey("locations.id", ondelete="SET NULL"), nullable=True
+        Integer, ForeignKey("locations.id", ondelete="SET NULL"), nullable=True
     )
     delivery_type: Mapped[str] = mapped_column(String(16), nullable=False)
     # 'pickup' | 'inpost'

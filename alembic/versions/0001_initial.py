@@ -20,7 +20,7 @@ def upgrade() -> None:
     # users
     op.create_table(
         "users",
-        sa.Column("id", sa.BigInteger, primary_key=True, autoincrement=True),
+        sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
         sa.Column("tg_id", sa.BigInteger, nullable=False, unique=True),
         sa.Column("username", sa.String(64), nullable=True),
         sa.Column("first_name", sa.String(128), nullable=False),
@@ -35,56 +35,51 @@ def upgrade() -> None:
     # cities
     op.create_table(
         "cities",
-        sa.Column("id", sa.BigInteger, primary_key=True, autoincrement=True),
+        sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
         sa.Column("name", sa.String(128), nullable=False),
         sa.Column("slug", sa.String(64), nullable=False, unique=True),
         sa.Column("manager_tg_id", sa.BigInteger, nullable=True),
-        sa.Column("is_active", sa.Boolean, nullable=False, server_default="true"),
+        sa.Column("is_active", sa.Boolean, nullable=False, server_default="1"),
     )
 
     # admins
     op.create_table(
         "admins",
-        sa.Column("id", sa.BigInteger, primary_key=True, autoincrement=True),
+        sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
         sa.Column("tg_id", sa.BigInteger, nullable=False, unique=True),
         sa.Column("role", sa.String(32), nullable=False, server_default="admin"),
-        sa.Column(
-            "city_id",
-            sa.BigInteger,
-            sa.ForeignKey("cities.id", ondelete="SET NULL"),
-            nullable=True,
-        ),
+        sa.Column("city_id", sa.Integer, sa.ForeignKey("cities.id", ondelete="SET NULL"), nullable=True),
     )
     op.create_index("ix_admins_tg_id", "admins", ["tg_id"])
 
     # locations
     op.create_table(
         "locations",
-        sa.Column("id", sa.BigInteger, primary_key=True, autoincrement=True),
-        sa.Column("city_id", sa.BigInteger, sa.ForeignKey("cities.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
+        sa.Column("city_id", sa.Integer, sa.ForeignKey("cities.id", ondelete="CASCADE"), nullable=False),
         sa.Column("name", sa.String(256), nullable=False),
         sa.Column("address", sa.String(512), nullable=False),
         sa.Column("description", sa.Text, nullable=True),
         sa.Column("curator_tg_username", sa.String(64), nullable=True),
-        sa.Column("is_active", sa.Boolean, nullable=False, server_default="true"),
+        sa.Column("is_active", sa.Boolean, nullable=False, server_default="1"),
     )
     op.create_index("ix_locations_city_id", "locations", ["city_id"])
 
     # categories
     op.create_table(
         "categories",
-        sa.Column("id", sa.BigInteger, primary_key=True, autoincrement=True),
+        sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
         sa.Column("name_ru", sa.String(128), nullable=False),
         sa.Column("name_pl", sa.String(128), nullable=False),
         sa.Column("name_uk", sa.String(128), nullable=False),
-        sa.Column("sort_order", sa.BigInteger, nullable=False, server_default="0"),
+        sa.Column("sort_order", sa.Integer, nullable=False, server_default="0"),
     )
 
     # products
     op.create_table(
         "products",
-        sa.Column("id", sa.BigInteger, primary_key=True, autoincrement=True),
-        sa.Column("category_id", sa.BigInteger, sa.ForeignKey("categories.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
+        sa.Column("category_id", sa.Integer, sa.ForeignKey("categories.id", ondelete="SET NULL"), nullable=True),
         sa.Column("name_ru", sa.String(256), nullable=False),
         sa.Column("name_pl", sa.String(256), nullable=False),
         sa.Column("name_uk", sa.String(256), nullable=False),
@@ -93,15 +88,15 @@ def upgrade() -> None:
         sa.Column("description_uk", sa.Text, nullable=True),
         sa.Column("image_file_id", sa.String(512), nullable=True),
         sa.Column("base_price", sa.Numeric(10, 2), nullable=False),
-        sa.Column("is_active", sa.Boolean, nullable=False, server_default="true"),
+        sa.Column("is_active", sa.Boolean, nullable=False, server_default="1"),
     )
     op.create_index("ix_products_category_id", "products", ["category_id"])
 
     # product_variants
     op.create_table(
         "product_variants",
-        sa.Column("id", sa.BigInteger, primary_key=True, autoincrement=True),
-        sa.Column("product_id", sa.BigInteger, sa.ForeignKey("products.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
+        sa.Column("product_id", sa.Integer, sa.ForeignKey("products.id", ondelete="CASCADE"), nullable=False),
         sa.Column("name_ru", sa.String(256), nullable=False),
         sa.Column("name_pl", sa.String(256), nullable=False),
         sa.Column("name_uk", sa.String(256), nullable=False),
@@ -113,9 +108,9 @@ def upgrade() -> None:
     # location_stock
     op.create_table(
         "location_stock",
-        sa.Column("id", sa.BigInteger, primary_key=True, autoincrement=True),
-        sa.Column("location_id", sa.BigInteger, sa.ForeignKey("locations.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("variant_id", sa.BigInteger, sa.ForeignKey("product_variants.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
+        sa.Column("location_id", sa.Integer, sa.ForeignKey("locations.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("variant_id", sa.Integer, sa.ForeignKey("product_variants.id", ondelete="CASCADE"), nullable=False),
         sa.Column("quantity", sa.Integer, nullable=False, server_default="0"),
         sa.Column("last_sold_at", sa.DateTime(timezone=True), nullable=True),
         sa.UniqueConstraint("location_id", "variant_id", name="uq_location_variant"),
@@ -124,18 +119,18 @@ def upgrade() -> None:
     # carts
     op.create_table(
         "carts",
-        sa.Column("id", sa.BigInteger, primary_key=True, autoincrement=True),
-        sa.Column("user_id", sa.BigInteger, sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True),
-        sa.Column("location_id", sa.BigInteger, sa.ForeignKey("locations.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
+        sa.Column("user_id", sa.Integer, sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True),
+        sa.Column("location_id", sa.Integer, sa.ForeignKey("locations.id", ondelete="SET NULL"), nullable=True),
     )
     op.create_index("ix_carts_user_id", "carts", ["user_id"])
 
     # cart_items
     op.create_table(
         "cart_items",
-        sa.Column("id", sa.BigInteger, primary_key=True, autoincrement=True),
-        sa.Column("cart_id", sa.BigInteger, sa.ForeignKey("carts.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("variant_id", sa.BigInteger, sa.ForeignKey("product_variants.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
+        sa.Column("cart_id", sa.Integer, sa.ForeignKey("carts.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("variant_id", sa.Integer, sa.ForeignKey("product_variants.id", ondelete="CASCADE"), nullable=False),
         sa.Column("quantity", sa.Integer, nullable=False, server_default="1"),
         sa.UniqueConstraint("cart_id", "variant_id", name="uq_cart_variant"),
     )
@@ -144,9 +139,9 @@ def upgrade() -> None:
     # orders
     op.create_table(
         "orders",
-        sa.Column("id", sa.BigInteger, primary_key=True, autoincrement=True),
-        sa.Column("user_id", sa.BigInteger, sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
-        sa.Column("location_id", sa.BigInteger, sa.ForeignKey("locations.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
+        sa.Column("user_id", sa.Integer, sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("location_id", sa.Integer, sa.ForeignKey("locations.id", ondelete="SET NULL"), nullable=True),
         sa.Column("delivery_type", sa.String(16), nullable=False),
         sa.Column("status", sa.String(32), nullable=False, server_default="new"),
         sa.Column("customer_name", sa.String(256), nullable=False),
@@ -166,9 +161,9 @@ def upgrade() -> None:
     # order_items
     op.create_table(
         "order_items",
-        sa.Column("id", sa.BigInteger, primary_key=True, autoincrement=True),
-        sa.Column("order_id", sa.BigInteger, sa.ForeignKey("orders.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("variant_id", sa.BigInteger, sa.ForeignKey("product_variants.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
+        sa.Column("order_id", sa.Integer, sa.ForeignKey("orders.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("variant_id", sa.Integer, sa.ForeignKey("product_variants.id", ondelete="SET NULL"), nullable=True),
         sa.Column("quantity", sa.Integer, nullable=False),
         sa.Column("price_at_order", sa.Numeric(10, 2), nullable=False),
     )

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import BigInteger, Boolean, ForeignKey, String, Text
+from sqlalchemy import Boolean, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from db.session import Base
@@ -11,9 +11,9 @@ class Location(Base):
 
     __tablename__ = "locations"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     city_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("cities.id", ondelete="CASCADE"), nullable=False, index=True
+        Integer, ForeignKey("cities.id", ondelete="CASCADE"), nullable=False, index=True
     )
     name: Mapped[str] = mapped_column(String(256), nullable=False)
     address: Mapped[str] = mapped_column(String(512), nullable=False)

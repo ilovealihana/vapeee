@@ -2,6 +2,7 @@ import asyncio
 from logging.config import fileConfig
 
 from alembic import context
+from sqlalchemy import engine_from_config, pool
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from config import settings
@@ -17,21 +18,27 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
+_is_sqlite = settings.DATABASE_URL.startswith("sqlite")
+
 
 def run_migrations_offline() -> None:
-    url = settings.DATABASE_URL
     context.configure(
-        url=url,
+        url=settings.DATABASE_URL,
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        render_as_batch=_is_sqlite,  # SQLite needs batch mode for ALTER TABLE
     )
     with context.begin_transaction():
         context.run_migrations()
 
 
 def do_run_migrations(connection):
-    context.configure(connection=connection, target_metadata=target_metadata)
+    context.configure(
+        connection=connection,
+        target_metadata=target_metadata,
+        render_as_batch=_is_sqlite,  # SQLite needs batch mode for ALTER TABLE
+    )
     with context.begin_transaction():
         context.run_migrations()
 
