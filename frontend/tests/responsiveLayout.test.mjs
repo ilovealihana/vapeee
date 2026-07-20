@@ -53,34 +53,34 @@ test('catalog filters stay in normal flow and do not overlap product cards', () 
   assert.doesNotMatch(productsSource, /<nav class="[^"]*\btop-16\b[^"]*"/);
   assert.doesNotMatch(productsSource, /<nav class="[^"]*\bz-40\b[^"]*"/);
   assert.doesNotMatch(productsSource, /<nav class="[^"]*\bbg-background\/95\b[^"]*"/);
-  assert.match(productsSource, /<main class="[^"]*\bpt-2\b[^"]*"/);
+  assert.match(productsSource, /<main className="[^"]*\bpt-2\b[^"]*"/);
 });
 
 test('catalog exposes a separate two and three column product grid selector', () => {
-  assert.match(productsSource, /data-catalog-layout="three"/);
-  assert.match(productsSource, /data-catalog-view="two"/);
-  assert.match(productsSource, /data-catalog-view="three"/);
-  assert.match(productsSource, /<div class="catalog-filter-bar[^"]*">/);
-  assert.match(productsSource, /<div class="catalog-view-toggle[^"]*"[\s\S]*<nav class="catalog-filter-scroll[^"]*custom-scrollbar[^"]*"/);
-  assert.doesNotMatch(productsSource, /<nav class="[^"]*custom-scrollbar[^"]*">\s*<div class="catalog-view-toggle"/);
-  assert.match(productsSource, /class="catalog-product-grid grid grid-cols-2 gap-4"/);
+  assert.match(productsSource, /data-catalog-layout=\{layout\}/);
+  assert.match(productsSource, /setLayout\('two'\)/);
+  assert.match(productsSource, /setLayout\('three'\)/);
+  assert.match(productsSource, /<div className="catalog-filter-bar[^"]*">/);
+  assert.match(productsSource, /className=\{`catalog-view-toggle[\s\S]*<nav className="catalog-filter-scroll[^"]*custom-scrollbar[^"]*"/);
+  assert.doesNotMatch(productsSource, /<nav className="[^"]*custom-scrollbar[^"]*">\s*<div className=\{`catalog-view-toggle/);
+  assert.match(productsSource, /className="catalog-product-grid grid grid-cols-2 gap-4"/);
   assert.match(css, /\.copied-catalog-shell\[data-catalog-layout="two"\] \.catalog-product-grid\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\) !important;/s);
   assert.match(css, /\.copied-catalog-shell\[data-catalog-layout="three"\] \.catalog-product-grid\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\) !important;/s);
   assert.match(css, /\.catalog-view-toggle\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*34px\);[^}]*height:\s*36px;/s);
 });
 
-test('catalog grid selector uses delegated clicks and keeps the three-column icon inside the active pill', () => {
-  assert.match(productsSource, /catalogShell\?\.addEventListener\('click',\s*onCatalogClick\)/);
-  assert.match(productsSource, /closest<HTMLButtonElement>\('\[data-catalog-view\]'\)/);
-  assert.doesNotMatch(productsSource, /viewButtons\.forEach\(\(button\) => button\.addEventListener\('click'/);
+test('catalog grid selector uses React state and keeps the three-column icon inside the active pill', () => {
+  assert.match(productsSource, /const \[layout, setLayout\] = useState<'two' \| 'three'>\('three'\)/);
+  assert.match(productsSource, /aria-pressed=\{layout === 'three'\}/);
+  assert.doesNotMatch(productsSource, /addEventListener\('click',\s*onCatalogClick\)/);
   assert.match(css, /\.catalog-view-icon-three span\s*\{[^}]*width:\s*5px;[^}]*height:\s*5px;/s);
   assert.match(css, /\.catalog-view-icon-three\s*\{[^}]*gap:\s*2px;/s);
 });
 
 test('catalog grid selector animates the active pill between two and three column modes', () => {
-  assert.match(productsSource, /class="catalog-view-toggle is-three"/);
-  assert.match(productsSource, /toggle\?\.classList\.toggle\('is-two',\s*nextView === 'two'\)/);
-  assert.match(productsSource, /toggle\?\.classList\.toggle\('is-three',\s*nextView === 'three'\)/);
+  assert.match(productsSource, /layout === 'two' \? 'is-two' : 'is-three'/);
+  assert.match(productsSource, /setLayout\('two'\)/);
+  assert.match(productsSource, /setLayout\('three'\)/);
   assert.match(css, /\.catalog-view-toggle::before\s*\{[^}]*transition:\s*transform 0\.22s cubic-bezier\(0\.2,\s*0\.8,\s*0\.2,\s*1\)/s);
   assert.match(css, /\.catalog-view-toggle\.is-three::before\s*\{[^}]*transform:\s*translateX\(36px\);/s);
   assert.doesNotMatch(css, /\.catalog-view-option\.is-active\s*\{[^}]*background:\s*#3d8489;/s);

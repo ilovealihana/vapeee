@@ -126,7 +126,7 @@ test('customer React pages use i18n for visible UI labels', async () => {
   assert.doesNotMatch(sources[4], /placeholder="ul\. Przykladowa 1, Wroclaw"/);
 });
 
-test('customer raw HTML pages build copied markup from i18n keys', async () => {
+test('customer copied pages use i18n keys and real cart/catalog flows', async () => {
   const sources = await Promise.all([
     readSource('../src/pages/Home.tsx'),
     readSource('../src/pages/Products.tsx'),
@@ -137,15 +137,23 @@ test('customer raw HTML pages build copied markup from i18n keys', async () => {
   for (const source of sources) {
     assert.match(source, /useI18n\(activeLocale\)/);
     assert.match(source, /useUserStore\(\(state\) => state\.activeLocale\)/);
-    assert.match(source, /useMemo\(\(\) => build\w+Markup\(t\), \[t\]\)/);
   }
 
+  assert.match(sources[0], /useMemo\(\(\) => build\w+Markup\(t\), \[t\]\)/);
+  assert.match(sources[3], /useMemo\(\(\) => build\w+Markup\(t\), \[t\]\)/);
   assert.match(sources[0], /t\('home\.greeting'\)/);
   assert.match(sources[0], /t\('home\.popular'\)/);
   assert.match(sources[1], /t\('catalog\.viewToggle'\)/);
-  assert.match(sources[1], /t\('catalog\.categories\.accessories'\)/);
+  assert.match(sources[1], /useParams<\{ locationId: string \}>\(\)/);
+  assert.match(sources[1], /const locationId = routeLocationId \|\| queryLocationId/);
+  assert.match(sources[1], /location_id: numericLocationId/);
+  assert.match(sources[1], /api\.catalog\.products/);
+  assert.match(sources[1], /await addItem\(variant\.id,\s*1,\s*numericLocationId\)/);
+  assert.match(sources[1], /t\('product\.add'\)/);
   assert.match(sources[2], /t\('cart\.total'\)/);
   assert.match(sources[2], /t\('cart\.checkout'\)/);
+  assert.match(sources[2], /await removeItem\(itemId\)/);
+  assert.match(sources[2], /navigate\('\/checkout'\)/);
   assert.match(sources[3], /t\('profile\.tabs\.profile'\)/);
   assert.match(sources[3], /t\('profile\.languagePanel\.soon'\)/);
   assert.doesNotMatch(sources[0], />Привет, paranoia!<\/h2>/);

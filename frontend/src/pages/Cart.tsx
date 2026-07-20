@@ -1,112 +1,144 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import CopiedBottomNav from '../components/CopiedBottomNav';
 import CopiedPageTitle from '../components/CopiedPageTitle';
 import CopiedSmokeBackground from '../components/CopiedSmokeBackground';
 import CopiedTopBar from '../components/CopiedTopBar';
+import ProductMedia from '../components/ProductMedia';
+import { formatApiError } from '../api/errors';
 import { useI18n } from '../i18n';
+import { useCartStore } from '../store/cart';
 import { useUserStore } from '../store/user';
 
-function buildCartMarkup(t: (key: string) => string) {
-  return String.raw`
-<div class="copied-cart-shell min-h-screen flex flex-col overflow-x-hidden custom-scroll">
-  <main class="flex-1 mt-2 px-margin-page pb-32 w-full relative z-10">
+function itemTitle(item: NonNullable<ReturnType<typeof useCartStore.getState>['cart']>['items'][number]) {
+  return item.product?.name_ru || item.variant?.name_ru || `#${item.variant_id}`;
+}
 
-    <div class="space-y-stack-md">
-      <div class="cart-card p-4 rounded-xl flex items-center gap-4 border border-outline-variant/10">
-        <div class="w-16 h-16 bg-surface-container-low rounded-lg overflow-hidden flex items-center justify-center">
-          <img class="h-12 w-auto object-contain" data-alt="A premium vapor product bottle with minimalist branding, captured in a studio setting with dramatic side-lighting. The background features ethereal white smoke textures swirling around the dark charcoal surface, emphasizing a luxurious and technical aesthetic. The lighting highlights the sleek glass texture of the bottle, following the brand's dark-mode-first visual language." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDwen8L4HW1EqVROrUakC08UprLncSr0eGk81hWmYqxIV84iPCOtD0SAltE-vrzg_v7vx4tyOxA8f2u8BP6m-W9cBJHkyjijV8KyRSGR3echUe8nAMQ2rTT_HUvKOCqOLUL3nbeDafBTBL5QOZVHdnfTyB2PFIXMqSVyfgvA7cmZLQbMPNnSvlymkBhVlp11lZRdRO_Ouj65Kij8NyGNoa4gH62snN_q9i5dfiVfCeuQ1uOKKwSZaFl8UlBvzkneCMSc40hI29LZrs"/>
-        </div>
-        <div class="flex-1">
-          <h3 class="text-label-lg font-label-lg text-on-surface">ELFLIQ</h3>
-          <p class="text-label-sm font-label-sm text-on-surface-variant">Pink Lemonade</p>
-          <p class="text-label-lg font-label-lg text-primary mt-1">49.90 zł</p>
-        </div>
-        <div class="flex items-center bg-surface-container rounded-full px-2 py-1 gap-3">
-          <button class="w-6 h-6 flex items-center justify-center text-on-surface-variant hover:text-on-surface">
-            <span class="material-symbols-outlined text-[18px]">remove</span>
-          </button>
-          <span class="text-label-lg font-label-lg text-on-surface w-4 text-center">1</span>
-          <button class="w-6 h-6 flex items-center justify-center text-on-surface-variant hover:text-on-surface">
-            <span class="material-symbols-outlined text-[18px]">add</span>
-          </button>
-        </div>
-      </div>
-
-      <div class="cart-card p-4 rounded-xl flex items-center gap-4 border border-outline-variant/10">
-        <div class="w-16 h-16 bg-surface-container-low rounded-lg overflow-hidden flex items-center justify-center">
-          <img class="h-12 w-auto object-contain" data-alt="A sleek black vape accessory bottle with modern typography on a dark charcoal background. Wispy smoke tendrils curl around the product in a high-contrast dark environment. The scene is illuminated with a soft, focused emerald light that catches the edges of the product, reflecting a premium and specialized retail atmosphere consistent with a minimalist corporate identity." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCrHzwI9eAdIlO5uhpzLS-1C3dYViiNklG7Rztae2fBpGGhue3zG0i156AxWfBAMETxc79AikSZvHCnk1RaqB_9YomMokHMs1EpkUTjR2IHwOa0X6yUzJ1k7b06xWEFsAI0MvWXyRk84RcjqjjWxCjP05vhT-b7zNuzW-XVeqYmetvQigAUkzqA0SU3OhbWRBRkpK8ta0AY5U7IBNF6JatXc_WCKf1A8ORPCEniexceIRtBD-g_X29jnpAdmVTFi2agaklX-90SxZc"/>
-        </div>
-        <div class="flex-1">
-          <h3 class="text-label-lg font-label-lg text-on-surface">ELFLIQ</h3>
-          <p class="text-label-sm font-label-sm text-on-surface-variant">Elfjacks</p>
-          <p class="text-label-lg font-label-lg text-primary mt-1">49.90 zł</p>
-        </div>
-        <div class="flex items-center bg-surface-container rounded-full px-2 py-1 gap-3">
-          <button class="w-6 h-6 flex items-center justify-center text-on-surface-variant hover:text-on-surface">
-            <span class="material-symbols-outlined text-[18px]">remove</span>
-          </button>
-          <span class="text-label-lg font-label-lg text-on-surface w-4 text-center">1</span>
-          <button class="w-6 h-6 flex items-center justify-center text-on-surface-variant hover:text-on-surface">
-            <span class="material-symbols-outlined text-[18px]">add</span>
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <div class="mt-stack-lg pt-6 border-t border-outline-variant/20">
-      <div class="flex justify-between items-center mb-8">
-        <span class="text-headline-sm font-headline-sm text-on-surface">${t('cart.total')}</span>
-        <span class="text-headline-sm font-headline-sm text-primary">99.80 zł</span>
-      </div>
-
-      <button class="w-full bg-primary text-on-primary py-4 rounded-xl font-headline-sm flex justify-center items-center gap-2 active:scale-95 transition-transform duration-150">
-        <span>${t('cart.checkout')}</span>
-        <span class="material-symbols-outlined">arrow_forward</span>
-      </button>
-    </div>
-  </main>
-
-</div>
-`;
+function itemSubtitle(item: NonNullable<ReturnType<typeof useCartStore.getState>['cart']>['items'][number]) {
+  if (item.product?.name_ru && item.variant?.name_ru) return item.variant.name_ru;
+  return '';
 }
 
 export default function Cart() {
+  const navigate = useNavigate();
   const activeLocale = useUserStore((state) => state.activeLocale);
   const { t } = useI18n(activeLocale);
-  const cartMarkup = useMemo(() => buildCartMarkup(t), [t]);
+  const { cart, loading, error: cartError, fetchCart, updateItem, removeItem, itemCount } = useCartStore();
+  const [busyItem, setBusyItem] = useState<number | null>(null);
+  const [actionError, setActionError] = useState('');
 
   useEffect(() => {
-    const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>('.copied-cart-shell .flex.items-center.bg-surface-container button'));
+    fetchCart();
+  }, [fetchCart]);
 
-    const onClick = (button: HTMLButtonElement) => {
-      const icon = button.querySelector('.material-symbols-outlined');
-      const isAdd = icon?.textContent === 'add';
-      const countSpan = button.parentElement?.querySelector<HTMLSpanElement>('span.text-on-surface');
-      if (!countSpan) return;
+  const changeQuantity = async (itemId: number, nextQuantity: number) => {
+    setBusyItem(itemId);
+    setActionError('');
+    try {
+      if (nextQuantity <= 0) await removeItem(itemId);
+      else await updateItem(itemId, nextQuantity);
+    } catch (e) {
+      setActionError(formatApiError(e, t));
+    } finally {
+      setBusyItem(null);
+    }
+  };
 
-      let count = Number.parseInt(countSpan.textContent || '1', 10);
-      if (isAdd) count += 1;
-      else if (count > 1) count -= 1;
-
-      countSpan.textContent = String(count);
-      countSpan.classList.add('scale-110');
-      window.setTimeout(() => countSpan.classList.remove('scale-110'), 100);
-    };
-
-    buttons.forEach((button) => button.addEventListener('click', () => onClick(button)));
-
-    return () => {
-      buttons.forEach((button) => button.replaceWith(button.cloneNode(true)));
-    };
-  }, []);
+  const items = cart?.items ?? [];
+  const total = Number(cart?.total || 0);
+  const displayError = actionError || (cartError ? formatApiError(cartError, t) : '');
 
   return (
     <>
       <CopiedSmokeBackground />
       <CopiedTopBar />
       <CopiedPageTitle activeTab="cart" />
-      <div dangerouslySetInnerHTML={{ __html: cartMarkup }} />
-      <CopiedBottomNav activeTab="cart" />
+      <div className="copied-cart-shell min-h-screen flex flex-col overflow-x-hidden custom-scroll">
+        <main className="flex-1 mt-2 px-margin-page pb-32 w-full relative z-10">
+          {loading && <div className="spinner" />}
+
+          {!loading && displayError && items.length === 0 && (
+            <section className="empty-state" style={{ paddingTop: 80 }}>
+              <div className="empty-visual">
+                <span className="material-symbols-outlined">error</span>
+              </div>
+              <h3>{displayError}</h3>
+            </section>
+          )}
+
+          {!loading && !displayError && items.length === 0 && (
+            <section className="empty-state" style={{ paddingTop: 80 }}>
+              <div className="empty-visual">
+                <span className="material-symbols-outlined">shopping_cart</span>
+              </div>
+              <h3>{t('cart.empty')}</h3>
+              <button className="btn btn-primary" type="button" onClick={() => navigate('/products')}>
+                {t('nav.catalog')}
+              </button>
+            </section>
+          )}
+
+          {items.length > 0 && (
+            <>
+              <div className="space-y-stack-md">
+                {items.map((item) => {
+                  const price = Number(item.price || item.product?.base_price || 0);
+                  const disabled = busyItem === item.id;
+
+                  return (
+                    <div key={item.id} className="cart-card p-4 rounded-xl flex items-center gap-4 border border-outline-variant/10">
+                      <ProductMedia compact label={itemTitle(item).slice(0, 4).toUpperCase()} />
+                      <div className="flex-1">
+                        <h3 className="text-label-lg font-label-lg text-on-surface">{itemTitle(item)}</h3>
+                        {itemSubtitle(item) && <p className="text-label-sm font-label-sm text-on-surface-variant">{itemSubtitle(item)}</p>}
+                        <p className="text-label-lg font-label-lg text-primary mt-1">{price.toFixed(2)} zl</p>
+                      </div>
+                      <div className="flex items-center bg-surface-container rounded-full px-2 py-1 gap-3">
+                        <button
+                          className="w-6 h-6 flex items-center justify-center text-on-surface-variant hover:text-on-surface"
+                          type="button"
+                          disabled={disabled}
+                          onClick={() => changeQuantity(item.id, item.quantity - 1)}
+                          aria-label={item.quantity <= 1 ? t('cart.remove') : 'minus'}
+                        >
+                          <span className="material-symbols-outlined text-[18px]">{item.quantity <= 1 ? 'delete' : 'remove'}</span>
+                        </button>
+                        <span className="text-label-lg font-label-lg text-on-surface w-4 text-center">{item.quantity}</span>
+                        <button
+                          className="w-6 h-6 flex items-center justify-center text-on-surface-variant hover:text-on-surface"
+                          type="button"
+                          disabled={disabled}
+                          onClick={() => changeQuantity(item.id, item.quantity + 1)}
+                          aria-label={t('product.add')}
+                        >
+                          <span className="material-symbols-outlined text-[18px]">add</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="mt-stack-lg pt-6 border-t border-outline-variant/20">
+                <div className="flex justify-between items-center mb-8">
+                  <span className="text-headline-sm font-headline-sm text-on-surface">{t('cart.total')}</span>
+                  <span className="text-headline-sm font-headline-sm text-primary">{total.toFixed(2)} zl</span>
+                </div>
+                {displayError && <p style={{ color: 'var(--danger)', marginBottom: 12 }}>{displayError}</p>}
+                <button
+                  className="w-full bg-primary text-on-primary py-4 rounded-xl font-headline-sm flex justify-center items-center gap-2 active:scale-95 transition-transform duration-150"
+                  type="button"
+                  onClick={() => navigate('/checkout')}
+                >
+                  <span>{t('cart.checkout')}</span>
+                  <span className="material-symbols-outlined">arrow_forward</span>
+                </button>
+              </div>
+            </>
+          )}
+        </main>
+      </div>
+      <CopiedBottomNav activeTab="cart" cartCount={itemCount()} />
     </>
   );
 }
