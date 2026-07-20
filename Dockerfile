@@ -9,5 +9,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy project
 COPY . .
 
-# Run migrations then start bot
-CMD ["sh", "-c", "alembic upgrade head && python main.py"]
+# Run migrations then start backend
+CMD ["sh", "-c", "alembic upgrade head && uvicorn webapp.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

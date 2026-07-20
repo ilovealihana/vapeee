@@ -1,106 +1,112 @@
-import { useNavigate } from 'react-router-dom';
-import { useCartStore } from '../store/cart';
+import { useEffect, useMemo } from 'react';
+import CopiedBottomNav from '../components/CopiedBottomNav';
+import CopiedPageTitle from '../components/CopiedPageTitle';
+import CopiedSmokeBackground from '../components/CopiedSmokeBackground';
+import CopiedTopBar from '../components/CopiedTopBar';
+import { useI18n } from '../i18n';
+import { useUserStore } from '../store/user';
 
-export default function Cart() {
-  const navigate = useNavigate();
-  const { cart, removeItem, updateItem, clearCart } = useCartStore();
-  const lang = 'ru';
+function buildCartMarkup(t: (key: string) => string) {
+  return String.raw`
+<div class="copied-cart-shell min-h-screen flex flex-col overflow-x-hidden custom-scroll">
+  <main class="flex-1 mt-2 px-margin-page pb-32 w-full relative z-10">
 
-  const getVariantName = (item: any) => {
-    if (!item.variant) return '?';
-    return lang === 'ru' ? item.variant.name_ru : lang === 'pl' ? item.variant.name_pl : item.variant.name_uk;
-  };
-
-  const getProductName = (item: any) => {
-    if (!item.product) return '';
-    return lang === 'ru' ? item.product.name_ru : lang === 'pl' ? item.product.name_pl : item.product.name_uk;
-  };
-
-  if (!cart || cart.items.length === 0) {
-    return (
-      <div className="page">
-        <div className="page-header">
-          <h1 className="page-title">Корзина</h1>
+    <div class="space-y-stack-md">
+      <div class="cart-card p-4 rounded-xl flex items-center gap-4 border border-outline-variant/10">
+        <div class="w-16 h-16 bg-surface-container-low rounded-lg overflow-hidden flex items-center justify-center">
+          <img class="h-12 w-auto object-contain" data-alt="A premium vapor product bottle with minimalist branding, captured in a studio setting with dramatic side-lighting. The background features ethereal white smoke textures swirling around the dark charcoal surface, emphasizing a luxurious and technical aesthetic. The lighting highlights the sleek glass texture of the bottle, following the brand's dark-mode-first visual language." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDwen8L4HW1EqVROrUakC08UprLncSr0eGk81hWmYqxIV84iPCOtD0SAltE-vrzg_v7vx4tyOxA8f2u8BP6m-W9cBJHkyjijV8KyRSGR3echUe8nAMQ2rTT_HUvKOCqOLUL3nbeDafBTBL5QOZVHdnfTyB2PFIXMqSVyfgvA7cmZLQbMPNnSvlymkBhVlp11lZRdRO_Ouj65Kij8NyGNoa4gH62snN_q9i5dfiVfCeuQ1uOKKwSZaFl8UlBvzkneCMSc40hI29LZrs"/>
         </div>
-        <div className="empty-state">
-          <div className="icon">🛒</div>
-          <h3>Корзина пуста</h3>
-          <p>Добавь товары из каталога</p>
-          <button className="btn btn-primary" style={{ marginTop: 20, maxWidth: 200, margin: '20px auto 0' }}
-            onClick={() => navigate('/products')}>
-            Перейти в каталог
+        <div class="flex-1">
+          <h3 class="text-label-lg font-label-lg text-on-surface">ELFLIQ</h3>
+          <p class="text-label-sm font-label-sm text-on-surface-variant">Pink Lemonade</p>
+          <p class="text-label-lg font-label-lg text-primary mt-1">49.90 zł</p>
+        </div>
+        <div class="flex items-center bg-surface-container rounded-full px-2 py-1 gap-3">
+          <button class="w-6 h-6 flex items-center justify-center text-on-surface-variant hover:text-on-surface">
+            <span class="material-symbols-outlined text-[18px]">remove</span>
+          </button>
+          <span class="text-label-lg font-label-lg text-on-surface w-4 text-center">1</span>
+          <button class="w-6 h-6 flex items-center justify-center text-on-surface-variant hover:text-on-surface">
+            <span class="material-symbols-outlined text-[18px]">add</span>
           </button>
         </div>
       </div>
-    );
-  }
 
-  return (
-    <div className="page">
-      <div className="page-header">
-        <h1 className="page-title">Корзина</h1>
-        <button
-          className="btn-ghost btn"
-          style={{ marginLeft: 'auto', fontSize: 13, color: 'var(--danger)' }}
-          onClick={clearCart}
-        >
-          Очистить
-        </button>
-      </div>
-      <div className="accent-line" style={{ margin: '0 16px 12px' }} />
-
-      <div className="container">
-        {cart.items.map((item) => (
-          <div key={item.id} className="card" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{
-              width: 50, height: 50, borderRadius: 10,
-              background: 'linear-gradient(135deg, #1a0a2e, #1a1a1a)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 24, flexShrink: 0,
-            }}>💨</div>
-
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 2 }}>
-                {getProductName(item)}
-              </div>
-              <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>
-                {getVariantName(item)}
-              </div>
-              <div className="price-small" style={{ marginTop: 2 }}>
-                {Number(item.subtotal || item.price || 0).toFixed(2)} zł
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-              <button
-                onClick={() => item.quantity > 1 ? updateItem(item.id, item.quantity - 1) : removeItem(item.id)}
-                style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--surface-2)', border: '1px solid var(--border)', cursor: 'pointer', color: 'var(--text)' }}
-              >−</button>
-              <span style={{ fontWeight: 700, minWidth: 20, textAlign: 'center' }}>{item.quantity}</span>
-              <button
-                onClick={() => updateItem(item.id, item.quantity + 1)}
-                style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--accent)', border: 'none', cursor: 'pointer', color: '#fff' }}
-              >+</button>
-            </div>
-          </div>
-        ))}
-
-        {/* Total */}
-        <div className="card" style={{ background: 'rgba(124,58,237,0.1)', border: '1px solid rgba(124,58,237,0.3)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontWeight: 700, fontSize: 17 }}>Итого:</span>
-            <span className="price">{Number(cart.total).toFixed(2)} zł</span>
-          </div>
+      <div class="cart-card p-4 rounded-xl flex items-center gap-4 border border-outline-variant/10">
+        <div class="w-16 h-16 bg-surface-container-low rounded-lg overflow-hidden flex items-center justify-center">
+          <img class="h-12 w-auto object-contain" data-alt="A sleek black vape accessory bottle with modern typography on a dark charcoal background. Wispy smoke tendrils curl around the product in a high-contrast dark environment. The scene is illuminated with a soft, focused emerald light that catches the edges of the product, reflecting a premium and specialized retail atmosphere consistent with a minimalist corporate identity." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCrHzwI9eAdIlO5uhpzLS-1C3dYViiNklG7Rztae2fBpGGhue3zG0i156AxWfBAMETxc79AikSZvHCnk1RaqB_9YomMokHMs1EpkUTjR2IHwOa0X6yUzJ1k7b06xWEFsAI0MvWXyRk84RcjqjjWxCjP05vhT-b7zNuzW-XVeqYmetvQigAUkzqA0SU3OhbWRBRkpK8ta0AY5U7IBNF6JatXc_WCKf1A8ORPCEniexceIRtBD-g_X29jnpAdmVTFi2agaklX-90SxZc"/>
         </div>
-
-        <button
-          className="btn btn-primary"
-          style={{ marginTop: 8 }}
-          onClick={() => navigate('/checkout')}
-        >
-          Оформить заказ →
-        </button>
+        <div class="flex-1">
+          <h3 class="text-label-lg font-label-lg text-on-surface">ELFLIQ</h3>
+          <p class="text-label-sm font-label-sm text-on-surface-variant">Elfjacks</p>
+          <p class="text-label-lg font-label-lg text-primary mt-1">49.90 zł</p>
+        </div>
+        <div class="flex items-center bg-surface-container rounded-full px-2 py-1 gap-3">
+          <button class="w-6 h-6 flex items-center justify-center text-on-surface-variant hover:text-on-surface">
+            <span class="material-symbols-outlined text-[18px]">remove</span>
+          </button>
+          <span class="text-label-lg font-label-lg text-on-surface w-4 text-center">1</span>
+          <button class="w-6 h-6 flex items-center justify-center text-on-surface-variant hover:text-on-surface">
+            <span class="material-symbols-outlined text-[18px]">add</span>
+          </button>
+        </div>
       </div>
     </div>
+
+    <div class="mt-stack-lg pt-6 border-t border-outline-variant/20">
+      <div class="flex justify-between items-center mb-8">
+        <span class="text-headline-sm font-headline-sm text-on-surface">${t('cart.total')}</span>
+        <span class="text-headline-sm font-headline-sm text-primary">99.80 zł</span>
+      </div>
+
+      <button class="w-full bg-primary text-on-primary py-4 rounded-xl font-headline-sm flex justify-center items-center gap-2 active:scale-95 transition-transform duration-150">
+        <span>${t('cart.checkout')}</span>
+        <span class="material-symbols-outlined">arrow_forward</span>
+      </button>
+    </div>
+  </main>
+
+</div>
+`;
+}
+
+export default function Cart() {
+  const activeLocale = useUserStore((state) => state.activeLocale);
+  const { t } = useI18n(activeLocale);
+  const cartMarkup = useMemo(() => buildCartMarkup(t), [t]);
+
+  useEffect(() => {
+    const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>('.copied-cart-shell .flex.items-center.bg-surface-container button'));
+
+    const onClick = (button: HTMLButtonElement) => {
+      const icon = button.querySelector('.material-symbols-outlined');
+      const isAdd = icon?.textContent === 'add';
+      const countSpan = button.parentElement?.querySelector<HTMLSpanElement>('span.text-on-surface');
+      if (!countSpan) return;
+
+      let count = Number.parseInt(countSpan.textContent || '1', 10);
+      if (isAdd) count += 1;
+      else if (count > 1) count -= 1;
+
+      countSpan.textContent = String(count);
+      countSpan.classList.add('scale-110');
+      window.setTimeout(() => countSpan.classList.remove('scale-110'), 100);
+    };
+
+    buttons.forEach((button) => button.addEventListener('click', () => onClick(button)));
+
+    return () => {
+      buttons.forEach((button) => button.replaceWith(button.cloneNode(true)));
+    };
+  }, []);
+
+  return (
+    <>
+      <CopiedSmokeBackground />
+      <CopiedTopBar />
+      <CopiedPageTitle activeTab="cart" />
+      <div dangerouslySetInnerHTML={{ __html: cartMarkup }} />
+      <CopiedBottomNav activeTab="cart" />
+    </>
   );
 }

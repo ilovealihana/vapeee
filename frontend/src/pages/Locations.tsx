@@ -1,15 +1,18 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api, type Location } from '../api/client';
+import Icon from '../components/Icon';
+import { useI18n } from '../i18n';
+import { useUserStore } from '../store/user';
 
-function formatLastSold(dateStr?: string): string {
-  if (!dateStr) return 'нет данных';
+function formatLastSold(dateStr: string | undefined, t: (key: string) => string): string {
+  if (!dateStr) return t('locations.noSalesYet');
   const d = new Date(dateStr);
   const diff = Date.now() - d.getTime();
   const h = Math.floor(diff / 3600000);
-  if (h < 1) return 'менее часа назад';
-  if (h < 24) return `${h}ч назад`;
-  return `${Math.floor(h / 24)}д назад`;
+  if (h < 1) return t('locations.lessThanHourAgo');
+  if (h < 24) return t('locations.hoursAgo').replace('{count}', String(h));
+  return t('locations.daysAgo').replace('{count}', String(Math.floor(h / 24)));
 }
 
 export default function Locations() {
@@ -18,84 +21,58 @@ export default function Locations() {
   const [locations, setLocations] = useState<Location[]>([]);
   const [selected, setSelected] = useState<Location | null>(null);
   const [loading, setLoading] = useState(true);
+  const activeLocale = useUserStore((state) => state.activeLocale);
+  const { t } = useI18n(activeLocale);
 
   useEffect(() => {
     if (cityId) {
-      api.catalog.locations(Number(cityId))
-        .then(setLocations)
-        .finally(() => setLoading(false));
+      api.catalog.locations(Number(cityId)).then(setLocations).finally(() => setLoading(false));
     }
   }, [cityId]);
 
   return (
     <div className="page">
       <div className="page-header">
-        <button className="back-btn" onClick={() => navigate('/cities')}>←</button>
-        <h1 className="page-title">Точки</h1>
+        <button className="back-btn" onClick={() => navigate('/cities')}><Icon name="chevronLeft" /></button>
+        <div>
+          <h1 className="page-title">{t('locations.title')}</h1>
+          <p className="page-subtitle">{t('locations.subtitle')}</p>
+        </div>
       </div>
-      <div className="accent-line" style={{ margin: '0 16px 16px' }} />
-
       <div className="container">
         {loading && <div className="spinner" />}
-        {locations.map((loc) => (
-          <div key={loc.id} className="card" style={{ cursor: 'pointer' }} onClick={() => setSelected(loc)}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-              <div>
-                <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 2 }}>🏪 {loc.name}</div>
-                <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>📍 {loc.address}</div>
+        <div style={{ display: 'grid', gap: 12 }}>
+          {locations.map((loc) => (
+            <button key={loc.id} className="card" onClick={() => setSelected(loc)} style={{ textAlign: 'left', cursor: 'pointer' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, marginBottom: 10 }}>
+                <div>
+                  <h2 style={{ fontSize: 18 }}>{loc.name}</h2>
+                  <p className="muted" style={{ marginTop: 4 }}>{loc.address}</p>
+                </div>
+                <span className="tag tag-accent">{loc.stock_summary?.total_qty ?? 0} {t('common.piecesShort')}</span>
               </div>
-              <span className="tag tag-accent">
-                {loc.stock_summary?.total_qty ?? 0} шт.
-              </span>
-            </div>
-            {loc.description && (
-              <div style={{ color: 'var(--text-muted)', fontSize: 13, marginBottom: 8 }}>{loc.description}</div>
-            )}
-            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-              ⏱ Последняя продажа: {formatLastSold(loc.stock_summary?.last_sold)}
-            </div>
-          </div>
-        ))}
+              <p className="muted" style={{ fontSize: 13 }}>{t('locations.lastSale')}: {formatLastSold(loc.stock_summary?.last_sold, t)}</p>
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Location detail bottom sheet */}
       {selected && (
         <div className="bottom-sheet-overlay" onClick={() => setSelected(null)}>
           <div className="bottom-sheet" onClick={(e) => e.stopPropagation()}>
             <div className="bottom-sheet-handle" />
-            <h2 style={{ fontWeight: 700, fontSize: 20, marginBottom: 4 }}>{selected.name}</h2>
-            <p style={{ color: 'var(--text-muted)', fontSize: 14, marginBottom: 16 }}>📍 {selected.address}</p>
-
-            <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
-              <div className="card" style={{ flex: 1, textAlign: 'center', margin: 0 }}>
-                <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--accent-2)' }}>
-                  {selected.stock_summary?.total_qty ?? 0}
-                </div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>позиций в наличии</div>
-              </div>
-              <div className="card" style={{ flex: 1, textAlign: 'center', margin: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 600 }}>
-                  {formatLastSold(selected.stock_summary?.last_sold)}
-                </div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>последняя продажа</div>
-              </div>
+            <h2 style={{ fontSize: 24, marginBottom: 8 }}>{selected.name}</h2>
+            <p className="muted" style={{ marginBottom: 20 }}>{selected.address}</p>
+            <div className="card" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+              <div><span className="muted">{t('locations.stock')}</span><br /><strong>{selected.stock_summary?.total_qty ?? 0} {t('common.piecesShort')}</strong></div>
+              <div><span className="muted">{t('locations.activity')}</span><br /><strong>{formatLastSold(selected.stock_summary?.last_sold, t)}</strong></div>
             </div>
-
-            <button
-              className="btn btn-primary"
-              style={{ marginBottom: 10 }}
-              onClick={() => navigate(`/locations/${selected.id}/products`)}
-            >
-              🛍 Смотреть ассортимент
+            <button className="btn btn-primary" onClick={() => navigate(`/locations/${selected.id}/products`)}>
+              {t('locations.openCatalog')}
             </button>
-
             {selected.curator_tg_username && (
-              <a
-                href={`https://t.me/${selected.curator_tg_username}`}
-                className="btn btn-secondary"
-                style={{ display: 'flex', textDecoration: 'none' }}
-              >
-                💬 Связаться с куратором
+              <a className="btn btn-secondary" style={{ width: '100%', marginTop: 10 }} href={`https://t.me/${selected.curator_tg_username}`}>
+                {t('locations.contactManager')}
               </a>
             )}
           </div>

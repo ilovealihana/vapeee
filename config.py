@@ -14,13 +14,10 @@ class Settings(BaseSettings):
         extra="ignore",          # ignore POSTGRES_USER/PASSWORD/DB etc.
     )
 
-    BOT_TOKEN: str
+    BOT_TOKEN: str = ""
 
     # Database
     DATABASE_URL: str = "postgresql+asyncpg://vapebot:vapebot_secret@localhost:5432/vapebot"
-
-    # Redis
-    REDIS_URL: str = "redis://localhost:6379/0"
 
     # Admins
     ADMIN_IDS: List[int] = []
@@ -42,17 +39,6 @@ class Settings(BaseSettings):
 
     # Mini App WebApp URL
     WEBAPP_URL: str = "https://frontend-vapebot.vercel.app"
-
-    # Webhook (empty = polling)
-    WEBHOOK_HOST: str = ""
-    WEBHOOK_PATH: str = "/webhook"
-    WEBHOOK_PORT: int = 8443
-
-    @property
-    def webhook_url(self) -> str | None:
-        if self.WEBHOOK_HOST:
-            return f"{self.WEBHOOK_HOST}{self.WEBHOOK_PATH}"
-        return None
 
 
 settings = Settings()

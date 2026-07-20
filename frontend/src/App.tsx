@@ -69,6 +69,13 @@ export default function App() {
 
 function BottomNavConditional() {
   const { pathname } = useLocation();
-  if (pathname.startsWith('/admin')) return null;
+  if (
+    pathname === '/' ||
+    pathname === '/products' ||
+    pathname === '/cart' ||
+    pathname === '/profile' ||
+    (pathname.startsWith('/locations/') && pathname.endsWith('/products')) ||
+    pathname.startsWith('/admin')
+  ) return null;
   return <BottomNav />;
 }

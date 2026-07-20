@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.repositories.catalog import CatalogRepository
 from webapp.deps import get_session
+from webapp.errors import ErrorCode, api_error
 from webapp.schemas import (
     CategorySchema,
     CitySchema,
@@ -36,6 +37,26 @@ def _product_schema_for_location(product, location_id: int | None = None) -> Pro
     return schema
 
 
+def _location_city_is_active(location) -> bool:
+    city = getattr(location, "city", None)
+    return bool(city and getattr(city, "is_active", False))
+
+
+async def _get_active_catalog_location(repo: CatalogRepository, location_id: int):
+    location = await repo.get_location(location_id)
+    if not location:
+        raise api_error(404, ErrorCode.CATALOG_LOCATION_NOT_FOUND, "Location not found")
+    if not location.is_active or not _location_city_is_active(location):
+        raise api_error(404, ErrorCode.CATALOG_LOCATION_INACTIVE, "Location inactive")
+    return location
+
+
+async def _validate_catalog_location(repo: CatalogRepository, location_id: int | None) -> None:
+    if location_id is None:
+        return
+    await _get_active_catalog_location(repo, location_id)
+
+
 @router.get("/cities", response_model=list[CitySchema])
 async def get_cities(session: AsyncSession = Depends(get_session)):
     repo = CatalogRepository(session)
@@ -46,6 +67,9 @@ async def get_cities(session: AsyncSession = Depends(get_session)):
 @router.get("/cities/{city_id}/locations", response_model=list[LocationSchema])
 async def get_locations(city_id: int, session: AsyncSession = Depends(get_session)):
     repo = CatalogRepository(session)
+    city = await repo.get_city(city_id)
+    if not city or not city.is_active:
+        raise api_error(404, ErrorCode.CATALOG_CITY_NOT_FOUND, "City not found")
     locations = await repo.get_locations_for_city(city_id)
     result = []
     for loc in locations:
@@ -62,10 +86,7 @@ async def get_locations(city_id: int, session: AsyncSession = Depends(get_sessio
 @router.get("/locations/{location_id}", response_model=LocationSchema)
 async def get_location(location_id: int, session: AsyncSession = Depends(get_session)):
     repo = CatalogRepository(session)
-    loc = await repo.get_location(location_id)
-    if not loc:
-        from fastapi import HTTPException
-        raise HTTPException(status_code=404, detail="Location not found")
+    loc = await _get_active_catalog_location(repo, location_id)
     summary = await repo.get_location_stock_summary(location_id)
     loc_schema = LocationSchema.model_validate(loc)
     loc_schema.stock_summary = LocationStockSummary(
@@ -91,6 +112,11 @@ async def get_products(
     session: AsyncSession = Depends(get_session),
 ):
     repo = CatalogRepository(session)
+    if category_id is not None:
+        category = await repo.get_category(category_id)
+        if not category:
+            raise api_error(404, ErrorCode.CATALOG_CATEGORY_NOT_FOUND, "Category not found")
+    await _validate_catalog_location(repo, location_id)
     products = await repo.get_products(
         category_id=category_id,
         location_id=location_id,
@@ -107,12 +133,13 @@ async def get_product(
     session: AsyncSession = Depends(get_session),
 ):
     repo = CatalogRepository(session)
+    await _validate_catalog_location(repo, location_id)
     product = await repo.get_product(product_id)
     if not product:
-        from fastapi import HTTPException
-        raise HTTPException(status_code=404, detail="Product not found")
+        raise api_error(404, ErrorCode.CATALOG_PRODUCT_NOT_FOUND, "Product not found")
+    if not product.is_active:
+        raise api_error(404, ErrorCode.CATALOG_PRODUCT_UNAVAILABLE, "Product unavailable")
     product_schema = _product_schema_for_location(product, location_id)
     if location_id is not None and not product_schema.variants:
-        from fastapi import HTTPException
-        raise HTTPException(status_code=404, detail="Product not available at this location")
+        raise api_error(404, ErrorCode.CATALOG_PRODUCT_UNAVAILABLE, "Product unavailable")
     return product_schema

@@ -3,22 +3,27 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from decimal import Decimal
+import logging
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings
 from db.models.location_stock import LocationStock
+from db.models.user import User
 from db.repositories.cart import CartRepository
 from db.repositories.catalog import CatalogRepository
 from db.repositories.order import OrderRepository
-from db.repositories.user import UserRepository
 from sqlalchemy import select
-from webapp.auth import verify_init_data
-from webapp.deps import get_session
+from webapp.deps import get_current_user, get_session
+from webapp.errors import ErrorCode, api_error
 from webapp.schemas import CreateOrderRequest, OrderSchema
+from webapp.services.notifications import TelegramNotificationSender
 
 router = APIRouter(prefix="/api/orders", tags=["orders"])
+logger = logging.getLogger(__name__)
+ALLOWED_DELIVERY_TYPES = {"pickup", "door_delivery", "inpost"}
+ALLOWED_PAYMENT_METHODS = {"cash", "blik", "monobank"}
 
 
 def delivery_cost_for_type(delivery_type: str, fixed_delivery_cost: Decimal) -> Decimal:
@@ -31,25 +36,63 @@ def should_deduct_stock(delivery_type: str) -> bool:
     return delivery_type in {"pickup", "door_delivery"}
 
 
-async def _get_user(authorization: str, session: AsyncSession):
-    init_data = authorization[4:] if authorization.startswith("tma ") else authorization
-    user_data = verify_init_data(init_data)
-    repo = UserRepository(session)
-    return await repo.upsert(
-        tg_id=user_data["id"],
-        first_name=user_data.get("first_name", ""),
-        last_name=user_data.get("last_name"),
-        username=user_data.get("username"),
-    )
+def _parse_schedule(scheduled_date: str, scheduled_time: str) -> datetime:
+    try:
+        scheduled_at = datetime.strptime(
+            f"{scheduled_date} {scheduled_time}", "%Y-%m-%d %H:%M"
+        ).replace(tzinfo=timezone.utc)
+    except ValueError:
+        raise api_error(422, ErrorCode.ORDER_INVALID_SCHEDULE, "Invalid schedule")
+    if scheduled_at <= datetime.now(tz=timezone.utc):
+        raise api_error(422, ErrorCode.ORDER_INVALID_SCHEDULE, "Invalid schedule")
+    return scheduled_at
+
+
+async def _validate_location_stock(
+    cart_items,
+    location_id: int,
+    session: AsyncSession,
+) -> None:
+    for item in cart_items:
+        if not item.variant_id:
+            continue
+        result = await session.execute(
+            select(LocationStock).where(
+                LocationStock.location_id == location_id,
+                LocationStock.variant_id == item.variant_id,
+            )
+        )
+        stock = result.scalar_one_or_none()
+        if not stock or stock.quantity < item.quantity:
+            raise api_error(
+                400,
+                ErrorCode.ORDER_INSUFFICIENT_STOCK,
+                "Insufficient stock",
+                {"available": stock.quantity if stock else 0, "requested": item.quantity},
+            )
+
+
+async def _validate_order_location_available(
+    catalog: CatalogRepository,
+    location_id: int,
+) -> None:
+    location = await catalog.get_location(location_id)
+    city = getattr(location, "city", None) if location else None
+    if (
+        not location
+        or not location.is_active
+        or not city
+        or not getattr(city, "is_active", False)
+    ):
+        raise api_error(400, ErrorCode.ORDER_INSUFFICIENT_STOCK, "Insufficient stock")
 
 
 @router.get("", response_model=list[OrderSchema])
 async def get_orders(
     page: int = 0,
-    authorization: str = Header(...),
+    user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    user = await _get_user(authorization, session)
     repo = OrderRepository(session)
     orders = await repo.get_user_orders(user.id, page=page, page_size=10)
     return [OrderSchema.model_validate(o) for o in orders]
@@ -58,16 +101,20 @@ async def get_orders(
 @router.post("", response_model=OrderSchema)
 async def create_order(
     body: CreateOrderRequest,
-    authorization: str = Header(...),
+    user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    user = await _get_user(authorization, session)
+    if body.delivery_type not in ALLOWED_DELIVERY_TYPES:
+        raise api_error(422, ErrorCode.ORDER_INVALID_DELIVERY_TYPE, "Invalid delivery type")
+    if body.payment_method not in ALLOWED_PAYMENT_METHODS:
+        raise api_error(422, ErrorCode.ORDER_INVALID_PAYMENT_METHOD, "Invalid payment method")
+    scheduled_at = _parse_schedule(body.scheduled_date, body.scheduled_time)
 
     # Get cart
     cart_repo = CartRepository(session)
     cart = await cart_repo.get_by_user_id(user.id)
     if not cart or not cart.items:
-        raise HTTPException(status_code=400, detail="Cart is empty")
+        raise api_error(400, ErrorCode.ORDER_CART_EMPTY, "Cart is empty")
 
     # Calculate totals
     catalog = CatalogRepository(session)
@@ -94,15 +141,11 @@ async def create_order(
     order_location_id = body.location_id or (cart.location_id if cart else None)
 
     if should_deduct_stock(body.delivery_type) and not order_location_id:
-        raise HTTPException(status_code=400, detail="Location is required for this delivery type")
+        raise api_error(400, ErrorCode.ORDER_LOCATION_REQUIRED, "Location is required")
 
-    # Parse scheduled datetime
-    try:
-        scheduled_at = datetime.strptime(
-            f"{body.scheduled_date} {body.scheduled_time}", "%Y-%m-%d %H:%M"
-        ).replace(tzinfo=timezone.utc)
-    except ValueError:
-        scheduled_at = None
+    if should_deduct_stock(body.delivery_type) and order_location_id:
+        await _validate_order_location_available(catalog, order_location_id)
+        await _validate_location_stock(cart.items, order_location_id, session)
 
     # Create order
     order_repo = OrderRepository(session)
@@ -135,14 +178,14 @@ async def create_order(
                 )
                 stock = result.scalar_one_or_none()
                 if stock:
-                    stock.quantity = max(0, stock.quantity - item.quantity)
+                    stock.quantity -= item.quantity
                     stock.last_sold_at = datetime.now(tz=timezone.utc)
         await session.commit()
 
     # Clear cart
     await cart_repo.clear(cart.id)
 
-    # Notify admins via bot
+    # Notify admins through the backend notification sender.
     await _notify_admins(order, order_items, body, catalog, session)
 
     # Reload full order
@@ -153,13 +196,9 @@ async def create_order(
 async def _notify_admins(order, items, body: CreateOrderRequest, catalog, session):
     """Send new order notification to all admin IDs."""
     try:
-        from aiogram import Bot
-        from aiogram.client.default import DefaultBotProperties
-        from aiogram.enums import ParseMode
-
-        bot = Bot(
-            token=settings.BOT_TOKEN,
-            default=DefaultBotProperties(parse_mode=ParseMode.HTML),
+        sender = TelegramNotificationSender(
+            bot_token=settings.BOT_TOKEN,
+            webapp_url=settings.WEBAPP_URL,
         )
 
         item_lines = []
@@ -187,11 +226,6 @@ async def _notify_admins(order, items, body: CreateOrderRequest, catalog, sessio
         )
 
         for admin_id in settings.ADMIN_IDS:
-            try:
-                await bot.send_message(admin_id, text, parse_mode="HTML")
-            except Exception:
-                pass
-
-        await bot.session.close()
+            await sender.send_message(admin_id, text, parse_mode="HTML")
     except Exception:
-        pass  # Don't fail order creation if notification fails
+        logger.exception("Failed to build or send order notification")

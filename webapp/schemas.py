@@ -5,40 +5,40 @@ from datetime import datetime
 from decimal import Decimal
 from typing import List, Optional
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 # ── User ──────────────────────────────────────────────────
 
 class UserSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     tg_id: int
     username: Optional[str]
     first_name: str
     last_name: Optional[str]
-    language: str
+    language_code: str = Field(validation_alias="language")
     phone: Optional[str]
     email: Optional[str]
     created_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 # ── Catalog ───────────────────────────────────────────────
 
 class CategorySchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     name_ru: str
     name_pl: str
     name_uk: str
     sort_order: int
 
-    class Config:
-        from_attributes = True
-
 
 class VariantSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     product_id: int
     name_ru: str
@@ -47,11 +47,10 @@ class VariantSchema(BaseModel):
     image_file_id: Optional[str]
     price_override: Optional[Decimal]
 
-    class Config:
-        from_attributes = True
-
 
 class ProductSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     category_id: Optional[int]
     name_ru: str
@@ -65,9 +64,6 @@ class ProductSchema(BaseModel):
     is_active: bool
     variants: List[VariantSchema] = []
 
-    class Config:
-        from_attributes = True
-
 
 class LocationStockSummary(BaseModel):
     total_qty: int
@@ -75,6 +71,8 @@ class LocationStockSummary(BaseModel):
 
 
 class LocationSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     city_id: int
     name: str
@@ -84,24 +82,22 @@ class LocationSchema(BaseModel):
     is_active: bool
     stock_summary: Optional[LocationStockSummary] = None
 
-    class Config:
-        from_attributes = True
-
 
 class CitySchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     name: str
     slug: str
     manager_tg_id: Optional[int]
     is_active: bool
 
-    class Config:
-        from_attributes = True
-
 
 # ── Cart ──────────────────────────────────────────────────
 
 class CartItemSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     variant_id: int
     quantity: int
@@ -110,19 +106,15 @@ class CartItemSchema(BaseModel):
     price: Optional[Decimal] = None
     subtotal: Optional[Decimal] = None
 
-    class Config:
-        from_attributes = True
-
 
 class CartSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     user_id: int
     location_id: Optional[int]
     items: List[CartItemSchema] = []
     total: Decimal = Decimal("0")
-
-    class Config:
-        from_attributes = True
 
 
 class AddCartItemRequest(BaseModel):
@@ -138,17 +130,18 @@ class UpdateCartItemRequest(BaseModel):
 # ── Orders ────────────────────────────────────────────────
 
 class OrderItemSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     variant_id: Optional[int]
     quantity: int
     price_at_order: Decimal
     variant: Optional[VariantSchema] = None
 
-    class Config:
-        from_attributes = True
-
 
 class OrderSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     delivery_type: str
     status: str
@@ -164,9 +157,6 @@ class OrderSchema(BaseModel):
     comment: Optional[str]
     created_at: datetime
     items: List[OrderItemSchema] = []
-
-    class Config:
-        from_attributes = True
 
 
 class CreateOrderRequest(BaseModel):
@@ -262,13 +252,12 @@ class UpdateOrderStatusRequest(BaseModel):
     status: str
 
 class AdminOrderSchema(OrderSchema):
+    model_config = ConfigDict(from_attributes=True)
+
     customer_name: str
     customer_phone: str
     customer_email: str
     location_name: Optional[str] = None
-
-    class Config:
-        from_attributes = True
 
 
 # ── Auth ──────────────────────────────────────────────────
@@ -285,11 +274,18 @@ class AuthResponse(BaseModel):
 # ── Language ──────────────────────────────────────────────
 
 class SetLanguageRequest(BaseModel):
-    language: str
+    language_code: str
 
-    @field_validator("language")
+    @model_validator(mode="before")
     @classmethod
-    def validate_language(cls, v):
-        if v not in ("ru", "pl", "uk"):
-            raise ValueError("language must be ru, pl or uk")
-        return v
+    def accept_legacy_language_alias(cls, data):
+        if isinstance(data, dict) and "language_code" not in data and "language" in data:
+            return {**data, "language_code": data["language"]}
+        return data
+
+    @field_validator("language_code")
+    @classmethod
+    def validate_language_code(cls, value: str) -> str:
+        if value not in ("ru", "en", "pl", "uk"):
+            raise ValueError("language_code must be ru, en, pl or uk")
+        return value

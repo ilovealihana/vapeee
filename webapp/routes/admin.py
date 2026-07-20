@@ -1,7 +1,7 @@
 """Admin API routes — protected by ADMIN_IDS check."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,6 +15,7 @@ from db.models.product_variant import ProductVariant
 from db.repositories.catalog import CatalogRepository
 from db.repositories.order import OrderRepository
 from webapp.deps import get_admin_user, get_session
+from webapp.errors import ErrorCode, api_error
 from webapp.schemas import (
     CitySchema, LocationSchema,
     ProductSchema, VariantSchema,
@@ -63,7 +64,7 @@ async def admin_update_city(
     result = await session.execute(select(City).where(City.id == city_id))
     city = result.scalar_one_or_none()
     if not city:
-        raise HTTPException(404, "City not found")
+        raise api_error(404, ErrorCode.ADMIN_CITY_NOT_FOUND, "City not found")
     if body.name is not None:
         city.name = body.name
     if body.slug is not None:
@@ -83,6 +84,10 @@ async def admin_delete_city(
     _=Depends(get_admin_user),
     session: AsyncSession = Depends(get_session),
 ):
+    result = await session.execute(select(City).where(City.id == city_id))
+    city = result.scalar_one_or_none()
+    if not city:
+        raise api_error(404, ErrorCode.ADMIN_CITY_NOT_FOUND, "City not found")
     await session.execute(delete(City).where(City.id == city_id))
     await session.commit()
 
@@ -131,7 +136,7 @@ async def admin_update_location(
     result = await session.execute(select(Location).where(Location.id == location_id))
     loc = result.scalar_one_or_none()
     if not loc:
-        raise HTTPException(404, "Location not found")
+        raise api_error(404, ErrorCode.ADMIN_LOCATION_NOT_FOUND, "Location not found")
     if body.name is not None:
         loc.name = body.name
     if body.address is not None:
@@ -153,6 +158,10 @@ async def admin_delete_location(
     _=Depends(get_admin_user),
     session: AsyncSession = Depends(get_session),
 ):
+    result = await session.execute(select(Location).where(Location.id == location_id))
+    loc = result.scalar_one_or_none()
+    if not loc:
+        raise api_error(404, ErrorCode.ADMIN_LOCATION_NOT_FOUND, "Location not found")
     await session.execute(delete(Location).where(Location.id == location_id))
     await session.commit()
 
@@ -196,7 +205,7 @@ async def admin_update_product(
     result = await session.execute(select(Product).where(Product.id == product_id))
     product = result.scalar_one_or_none()
     if not product:
-        raise HTTPException(404, "Product not found")
+        raise api_error(404, ErrorCode.ADMIN_PRODUCT_NOT_FOUND, "Product not found")
     for field, value in body.model_dump(exclude_none=True).items():
         setattr(product, field, value)
     await session.commit()
@@ -212,9 +221,10 @@ async def admin_delete_product(
 ):
     result = await session.execute(select(Product).where(Product.id == product_id))
     product = result.scalar_one_or_none()
-    if product:
-        product.is_active = False
-        await session.commit()
+    if not product:
+        raise api_error(404, ErrorCode.ADMIN_PRODUCT_NOT_FOUND, "Product not found")
+    product.is_active = False
+    await session.commit()
 
 
 # ── Variants ──────────────────────────────────────────────
@@ -247,7 +257,7 @@ async def admin_update_variant(
     result = await session.execute(select(ProductVariant).where(ProductVariant.id == variant_id))
     variant = result.scalar_one_or_none()
     if not variant:
-        raise HTTPException(404, "Variant not found")
+        raise api_error(404, ErrorCode.ADMIN_VARIANT_NOT_FOUND, "Variant not found")
     for field, value in body.model_dump(exclude_none=True).items():
         setattr(variant, field, value)
     await session.commit()
@@ -261,6 +271,10 @@ async def admin_delete_variant(
     _=Depends(get_admin_user),
     session: AsyncSession = Depends(get_session),
 ):
+    result = await session.execute(select(ProductVariant).where(ProductVariant.id == variant_id))
+    variant = result.scalar_one_or_none()
+    if not variant:
+        raise api_error(404, ErrorCode.ADMIN_VARIANT_NOT_FOUND, "Variant not found")
     await session.execute(delete(ProductVariant).where(ProductVariant.id == variant_id))
     await session.commit()
 
@@ -357,5 +371,5 @@ async def admin_update_order_status(
     repo = OrderRepository(session)
     order = await repo.set_status(order_id, body.status)
     if not order:
-        raise HTTPException(404, "Order not found")
+        raise api_error(404, ErrorCode.ADMIN_ORDER_NOT_FOUND, "Order not found")
     return OrderSchema.model_validate(order)

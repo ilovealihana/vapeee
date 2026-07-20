@@ -17,34 +17,19 @@ services:
       timeout: 5s
       retries: 5
 
-  redis:
-    image: redis:7-alpine
-    container_name: vapebot_redis
-    restart: unless-stopped
-    volumes:
-      - redis_data:/data
-    ports:
-      - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  bot:
+  backend:
     build: .
-    container_name: vapebot_bot
+    container_name: vapebot_backend
     restart: unless-stopped
     env_file: .env
     depends_on:
       postgres:
         condition: service_healthy
-      redis:
-        condition: service_healthy
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-vapebot}:${POSTGRES_PASSWORD:-vapebot_secret}@postgres:5432/${POSTGRES_DB:-vapebot}
-      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "${PORT:-8000}:${PORT:-8000}"
+    command: sh -c "alembic upgrade head && uvicorn webapp.main:app --host 0.0.0.0 --port ${PORT:-8000}"
 
 volumes:
   postgres_data:
-  redis_data:

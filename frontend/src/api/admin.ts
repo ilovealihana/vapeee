@@ -2,6 +2,8 @@
  * Admin API client — all requests require admin tg_id.
  */
 
+import { parseApiError } from './errors';
+
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 function getInitData(): string {
@@ -21,8 +23,7 @@ async function req<T>(path: string, options: RequestInit = {}): Promise<T> {
     },
   });
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail || `HTTP ${res.status}`);
+    throw await parseApiError(res);
   }
   if (res.status === 204) return undefined as T;
   return res.json();

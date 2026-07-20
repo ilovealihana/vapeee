@@ -1,7 +1,18 @@
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { formatApiError } from '../api/errors';
 import { api, type Product, type Variant } from '../api/client';
+import Icon from '../components/Icon';
+import ProductMedia from '../components/ProductMedia';
+import { useI18n } from '../i18n';
 import { useCartStore } from '../store/cart';
+import { useUserStore } from '../store/user';
+
+function flavorLabel(count: number, t: (key: string) => string): string {
+  if (count === 1) return t('product.flavor.one');
+  if (count > 1 && count < 5) return t('product.flavor.few');
+  return t('product.flavor.many');
+}
 
 export default function ProductDetail() {
   const { productId } = useParams<{ productId: string }>();
@@ -14,45 +25,53 @@ export default function ProductDetail() {
   const [selectedVariant, setSelectedVariant] = useState<Variant | null>(null);
   const [qty, setQty] = useState(1);
   const [adding, setAdding] = useState(false);
-  const [added, setAdded] = useState(false);
-  const { addItem } = useCartStore();
+  const [loadError, setLoadError] = useState('');
+  const [addError, setAddError] = useState('');
+  const { addItem, fetchCart } = useCartStore();
+  const activeLocale = useUserStore((state) => state.activeLocale);
+  const { t } = useI18n(activeLocale);
   const lang = 'ru';
 
   useEffect(() => {
-    if (productId) {
-      api.catalog.product(
-        Number(productId),
-        locationId ? { location_id: Number(locationId) } : undefined,
-      ).then((p) => {
+    if (!productId) return;
+    api.catalog.product(Number(productId), locationId ? { location_id: Number(locationId) } : undefined)
+      .then((p) => {
         setProduct(p);
-        if (p.variants.length === 1) setSelectedVariant(p.variants[0]);
-      });
-    }
-  }, [productId, locationId]);
+        setSelectedVariant(p.variants[0] || null);
+      })
+      .catch((e) => setLoadError(formatApiError(e, t)));
+  }, [productId, locationId, t]);
 
-  if (!product) return <div className="spinner" />;
+  if (loadError) {
+    return (
+      <div className="page">
+        <div className="empty-state">
+          <div className="empty-visual"><Icon name="package" size={32} /></div>
+          <h3>{t('productDetail.unavailable')}</h3>
+          <p>{loadError}</p>
+          <button className="btn btn-primary" style={{ marginTop: 24 }} onClick={() => navigate(-1)}>{t('common.back')}</button>
+        </div>
+      </div>
+    );
+  }
 
-  const getName = (field: 'name' | 'description') => {
-    if (field === 'name') return lang === 'ru' ? product.name_ru : lang === 'pl' ? product.name_pl : product.name_uk;
-    return lang === 'ru' ? product.description_ru : lang === 'pl' ? product.description_pl : product.description_uk;
-  };
+  if (!product) return <div className="page"><div className="spinner" /></div>;
 
-  const getVariantName = (v: Variant) =>
-    lang === 'ru' ? v.name_ru : lang === 'pl' ? v.name_pl : v.name_uk;
-
-  const price = selectedVariant?.price_override
-    ? Number(selectedVariant.price_override)
-    : Number(product.base_price);
+  const name = lang === 'ru' ? product.name_ru : lang === 'pl' ? product.name_pl : product.name_uk;
+  const desc = lang === 'ru' ? product.description_ru : lang === 'pl' ? product.description_pl : product.description_uk;
+  const variantName = (v: Variant) => lang === 'ru' ? v.name_ru : lang === 'pl' ? v.name_pl : v.name_uk;
+  const price = selectedVariant?.price_override ? Number(selectedVariant.price_override) : Number(product.base_price);
 
   const handleAddToCart = async () => {
     if (!selectedVariant) return;
     setAdding(true);
+    setAddError('');
     try {
       await addItem(selectedVariant.id, qty, locationId ? Number(locationId) : undefined);
-      await useCartStore.getState().fetchCart();
-      setAdded(true);
-      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
-      setTimeout(() => setAdded(false), 2000);
+      await fetchCart();
+      navigate('/cart');
+    } catch (e: any) {
+      setAddError(formatApiError(e, t));
     } finally {
       setAdding(false);
     }
@@ -61,118 +80,48 @@ export default function ProductDetail() {
   return (
     <div className="page">
       <div className="page-header">
-        <button className="back-btn" onClick={() => navigate(-1)}>←</button>
-        <h1 className="page-title" style={{ fontSize: 18 }}>{getName('name')}</h1>
+        <button className="back-btn" onClick={() => navigate(-1)} aria-label={t('common.back')}><Icon name="chevronLeft" /></button>
+        <h1 className="page-title" style={{ fontSize: 20 }}>{name}</h1>
       </div>
 
-      {/* Product image */}
-      <div style={{
-        height: 240,
-        background: 'linear-gradient(135deg, #1a0a2e 0%, #0d1a2e 100%)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontSize: 80,
-        marginBottom: 4,
-      }}>
-        💨
-      </div>
+      <div className="container">
+        <ProductMedia />
 
-      <div className="container" style={{ paddingTop: 16 }}>
-        {/* Price & name */}
-        <div style={{ marginBottom: 16 }}>
-          <h2 style={{ fontWeight: 800, fontSize: 22, marginBottom: 4 }}>{getName('name')}</h2>
-          <span className="price">{(price * qty).toFixed(2)} zł</span>
-          {qty > 1 && (
-            <span style={{ color: 'var(--text-muted)', fontSize: 13, marginLeft: 8 }}>
-              ({price.toFixed(2)} × {qty})
-            </span>
-          )}
-        </div>
+        <div style={{ marginTop: 24 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'start' }}>
+            <div>
+              <h2 style={{ fontSize: 28, letterSpacing: '-0.02em', marginBottom: 8 }}>{name}</h2>
+              <p className="muted">{product.variants.length || 1} {flavorLabel(product.variants.length || 1, t)}</p>
+            </div>
+            <span className="price">{(price * qty).toFixed(2)} zł</span>
+          </div>
 
-        {/* Description */}
-        {getName('description') && (
-          <p style={{ color: 'var(--text-muted)', fontSize: 14, marginBottom: 16, lineHeight: 1.6 }}>
-            {getName('description')}
-          </p>
-        )}
+          {desc && <p style={{ color: 'var(--secondary)', marginTop: 18 }}>{desc}</p>}
 
-        {/* Variant picker */}
-        {product.variants.length > 0 && (
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ fontWeight: 700, marginBottom: 10 }}>Выбери вкус / цвет:</div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {product.variants.map((v) => (
-                <button
-                  key={v.id}
-                  onClick={() => setSelectedVariant(v)}
-                  style={{
-                    padding: '8px 16px',
-                    borderRadius: 20,
-                    border: `1.5px solid ${selectedVariant?.id === v.id ? 'var(--accent)' : 'var(--border)'}`,
-                    background: selectedVariant?.id === v.id ? 'rgba(124,58,237,0.15)' : 'var(--surface)',
-                    color: selectedVariant?.id === v.id ? 'var(--accent)' : 'var(--text)',
-                    fontWeight: selectedVariant?.id === v.id ? 600 : 400,
-                    cursor: 'pointer',
-                    fontSize: 14,
-                    transition: 'all 0.15s',
-                  }}
-                >
-                  {getVariantName(v)}
-                  {v.price_override && (
-                    <span style={{ marginLeft: 6, color: 'var(--accent-2)', fontSize: 12 }}>
-                      {Number(v.price_override).toFixed(0)} zł
-                    </span>
-                  )}
-                </button>
-              ))}
+          <div className="section-heading"><h2>{t('productDetail.flavor')}</h2><span>{t('productDetail.chooseVariant')}</span></div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {product.variants.map((v) => (
+              <button key={v.id} className={`chip ${selectedVariant?.id === v.id ? 'active' : ''}`} onClick={() => setSelectedVariant(v)}>
+                {variantName(v)}
+              </button>
+            ))}
+          </div>
+
+          <div className="section-heading"><h2>{t('productDetail.quantity')}</h2></div>
+          <div className="card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span className="muted">{t('productDetail.toCart')}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+              <button className="icon-btn" onClick={() => setQty((q) => Math.max(1, q - 1))}><Icon name="minus" /></button>
+              <strong style={{ minWidth: 24, textAlign: 'center' }}>{qty}</strong>
+              <button className="icon-btn" onClick={() => setQty((q) => q + 1)}><Icon name="plus" /></button>
             </div>
           </div>
-        )}
 
-        {/* Quantity */}
-        <div style={{ marginBottom: 24 }}>
-          <div style={{ fontWeight: 700, marginBottom: 10 }}>Количество:</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-            <button
-              onClick={() => setQty(q => Math.max(1, q - 1))}
-              style={{
-                width: 40, height: 40, borderRadius: '50%',
-                background: 'var(--surface)', border: '1px solid var(--border)',
-                fontSize: 20, cursor: 'pointer', color: 'var(--text)',
-              }}
-            >−</button>
-            <span style={{ fontSize: 20, fontWeight: 700, minWidth: 32, textAlign: 'center' }}>{qty}</span>
-            <button
-              onClick={() => setQty(q => q + 1)}
-              style={{
-                width: 40, height: 40, borderRadius: '50%',
-                background: 'var(--accent)', border: 'none',
-                fontSize: 20, cursor: 'pointer', color: '#fff',
-              }}
-            >+</button>
-          </div>
+          {addError && <p style={{ color: 'var(--danger)', marginTop: 12 }}>{addError}</p>}
+          <button className="btn btn-primary" style={{ marginTop: 20 }} disabled={!selectedVariant || adding} onClick={handleAddToCart}>
+            {adding ? t('productDetail.adding') : t('productDetail.addToCart')}
+          </button>
         </div>
-
-        {/* Add to cart */}
-        <button
-          className="btn btn-primary"
-          onClick={handleAddToCart}
-          disabled={!selectedVariant || adding}
-          style={{
-            marginBottom: 12,
-            background: added ? 'var(--success)' : undefined,
-            opacity: !selectedVariant ? 0.5 : 1,
-          }}
-        >
-          {added ? '✅ Добавлено в корзину!' : adding ? '⏳...' : '🛒 В корзину'}
-        </button>
-
-        {!selectedVariant && (
-          <p style={{ color: 'var(--text-muted)', fontSize: 13, textAlign: 'center' }}>
-            Выбери вкус/цвет чтобы добавить в корзину
-          </p>
-        )}
       </div>
     </div>
   );

@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from webapp.errors import register_error_handlers
 from webapp.routes import auth, catalog, cart, orders, user, admin
 
 
@@ -34,6 +35,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+register_error_handlers(app)
 
 # Include routers
 app.include_router(auth.router)

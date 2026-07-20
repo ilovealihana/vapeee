@@ -47,7 +47,9 @@ class CatalogRepository:
 
     async def get_location(self, location_id: int) -> Location | None:
         result = await self.session.execute(
-            select(Location).where(Location.id == location_id)
+            select(Location)
+            .where(Location.id == location_id)
+            .options(selectinload(Location.city))
         )
         return result.scalar_one_or_none()
 
@@ -116,6 +118,10 @@ class CatalogRepository:
     async def get_categories(self) -> list[Category]:
         result = await self.session.execute(select(Category).order_by(Category.sort_order))
         return list(result.scalars().all())
+
+    async def get_category(self, category_id: int) -> Category | None:
+        result = await self.session.execute(select(Category).where(Category.id == category_id))
+        return result.scalar_one_or_none()
 
     async def create_category(self, name_ru: str, name_pl: str, name_uk: str) -> Category:
         cat = Category(name_ru=name_ru, name_pl=name_pl, name_uk=name_uk)

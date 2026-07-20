@@ -3,14 +3,16 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from db.models.location_stock import LocationStock
 from db.repositories.cart import CartRepository
 from db.repositories.catalog import CatalogRepository
-from db.repositories.user import UserRepository
-from webapp.auth import verify_init_data
-from webapp.deps import get_session
+from db.models.user import User
+from webapp.deps import get_current_user, get_session
+from webapp.errors import ErrorCode, api_error
 from webapp.schemas import (
     AddCartItemRequest,
     CartItemSchema,
@@ -23,16 +25,47 @@ from webapp.schemas import (
 router = APIRouter(prefix="/api/cart", tags=["cart"])
 
 
-async def _get_user(authorization: str, session: AsyncSession):
-    init_data = authorization[4:] if authorization.startswith("tma ") else authorization
-    user_data = verify_init_data(init_data)
-    repo = UserRepository(session)
-    return await repo.upsert(
-        tg_id=user_data["id"],
-        first_name=user_data.get("first_name", ""),
-        last_name=user_data.get("last_name"),
-        username=user_data.get("username"),
+async def _validate_add_item_available(
+    body: AddCartItemRequest,
+    requested_total_quantity: int,
+    catalog: CatalogRepository,
+    session: AsyncSession,
+) -> None:
+    variant = await catalog.get_variant(body.variant_id)
+    if not variant:
+        raise api_error(400, ErrorCode.CART_VARIANT_UNAVAILABLE, "Variant unavailable")
+
+    product = await catalog.get_product(variant.product_id)
+    if not product or not product.is_active:
+        raise api_error(400, ErrorCode.CART_VARIANT_UNAVAILABLE, "Variant unavailable")
+
+    if body.location_id is None:
+        return
+
+    location = await catalog.get_location(body.location_id)
+    city = getattr(location, "city", None) if location else None
+    if (
+        not location
+        or not location.is_active
+        or not city
+        or not getattr(city, "is_active", False)
+    ):
+        raise api_error(400, ErrorCode.CART_VARIANT_UNAVAILABLE, "Variant unavailable")
+
+    result = await session.execute(
+        select(LocationStock).where(
+            LocationStock.location_id == body.location_id,
+            LocationStock.variant_id == body.variant_id,
+        )
     )
+    stock = result.scalar_one_or_none()
+    if not stock or stock.quantity < requested_total_quantity:
+        raise api_error(
+            400,
+            ErrorCode.CART_INSUFFICIENT_STOCK,
+            "Insufficient stock",
+            {"available": stock.quantity if stock else 0, "requested": requested_total_quantity},
+        )
 
 
 async def _build_cart_schema(cart, session: AsyncSession) -> CartSchema:
@@ -65,10 +98,9 @@ async def _build_cart_schema(cart, session: AsyncSession) -> CartSchema:
 
 @router.get("", response_model=CartSchema)
 async def get_cart(
-    authorization: str = Header(...),
+    user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    user = await _get_user(authorization, session)
     repo = CartRepository(session)
     cart = await repo.get_by_user_id(user.id)
     if not cart:
@@ -80,11 +112,18 @@ async def get_cart(
 @router.post("/items", response_model=CartSchema)
 async def add_item(
     body: AddCartItemRequest,
-    authorization: str = Header(...),
+    user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    user = await _get_user(authorization, session)
+    if body.quantity <= 0:
+        raise api_error(422, ErrorCode.CART_INVALID_QUANTITY, "Invalid quantity")
     repo = CartRepository(session)
+    existing_cart = await repo.get_by_user_id(user.id)
+    existing_quantity = sum(
+        item.quantity for item in existing_cart.items if item.variant_id == body.variant_id
+    ) if existing_cart else 0
+    catalog = CatalogRepository(session)
+    await _validate_add_item_available(body, existing_quantity + body.quantity, catalog, session)
     cart = await repo.get_or_create(user.id, body.location_id)
 
     # Update location if switching
@@ -103,14 +142,30 @@ async def add_item(
 async def update_item(
     item_id: int,
     body: UpdateCartItemRequest,
-    authorization: str = Header(...),
+    user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    user = await _get_user(authorization, session)
+    if body.quantity <= 0:
+        raise api_error(422, ErrorCode.CART_INVALID_QUANTITY, "Invalid quantity")
     repo = CartRepository(session)
     cart = await repo.get_by_user_id(user.id)
     if not cart:
-        raise HTTPException(status_code=404, detail="Cart not found")
+        raise api_error(404, ErrorCode.CART_ITEM_NOT_FOUND, "Cart item not found")
+    item = await repo.get_item(cart.id, item_id)
+    if not item:
+        raise api_error(404, ErrorCode.CART_ITEM_NOT_FOUND, "Cart item not found")
+
+    catalog = CatalogRepository(session)
+    await _validate_add_item_available(
+        AddCartItemRequest(
+            variant_id=item.variant_id,
+            quantity=body.quantity,
+            location_id=cart.location_id,
+        ),
+        body.quantity,
+        catalog,
+        session,
+    )
 
     await repo.set_item_quantity(cart.id, item_id, body.quantity)
     session.expire_all()
@@ -121,14 +176,16 @@ async def update_item(
 @router.delete("/items/{item_id}", response_model=CartSchema)
 async def remove_item(
     item_id: int,
-    authorization: str = Header(...),
+    user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    user = await _get_user(authorization, session)
     repo = CartRepository(session)
     cart = await repo.get_by_user_id(user.id)
     if not cart:
-        raise HTTPException(status_code=404, detail="Cart not found")
+        raise api_error(404, ErrorCode.CART_ITEM_NOT_FOUND, "Cart item not found")
+    item = await repo.get_item(cart.id, item_id)
+    if not item:
+        raise api_error(404, ErrorCode.CART_ITEM_NOT_FOUND, "Cart item not found")
 
     await repo.remove_item(cart.id, item_id)
     session.expire_all()
@@ -138,10 +195,9 @@ async def remove_item(
 
 @router.delete("", status_code=204)
 async def clear_cart(
-    authorization: str = Header(...),
+    user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    user = await _get_user(authorization, session)
     repo = CartRepository(session)
     cart = await repo.get_by_user_id(user.id)
     if cart:

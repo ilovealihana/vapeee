@@ -1,21 +1,36 @@
 import { useEffect, useState } from 'react';
 import { adminApi, type AdminOrder } from '../../api/admin';
+import Icon from '../../components/Icon';
+import { useI18n } from '../../i18n';
+import { useUserStore } from '../../store/user';
+import { AdminEmptyState, AdminModal, AdminPageHeader, AdminStatusBadge } from './AdminUI';
 
 const STATUSES = [
-  { id: '', label: 'Все' },
-  { id: 'new', label: '🆕 Новые' },
-  { id: 'confirmed', label: '✅ Подтверждены' },
-  { id: 'ready', label: '📦 Готовы' },
-  { id: 'completed', label: '✔️ Выполнены' },
-  { id: 'cancelled', label: '❌ Отменены' },
+  { id: '', labelKey: 'admin.orders.filters.all' },
+  { id: 'new', labelKey: 'admin.orders.filters.new' },
+  { id: 'confirmed', labelKey: 'admin.orders.filters.confirmed' },
+  { id: 'ready', labelKey: 'admin.orders.filters.ready' },
+  { id: 'completed', labelKey: 'admin.orders.filters.completed' },
+  { id: 'cancelled', labelKey: 'admin.orders.filters.cancelled' },
 ];
 
-const STATUS_LABELS: Record<string, string> = {
-  new: '🆕 Новый', confirmed: '✅ Подтверждён',
-  ready: '📦 Готов', completed: '✔️ Выполнен', cancelled: '❌ Отменён',
+const STATUS_LABEL_KEYS: Record<string, string> = {
+  new: 'admin.orders.status.new',
+  confirmed: 'admin.orders.status.confirmed',
+  ready: 'admin.orders.status.ready',
+  completed: 'admin.orders.status.completed',
+  cancelled: 'admin.orders.status.cancelled',
+};
+
+const DELIVERY_LABEL_KEYS: Record<string, string> = {
+  door_delivery: 'admin.orders.delivery.door',
+  pickup: 'admin.orders.delivery.pickup',
+  inpost: 'admin.orders.delivery.inpost',
 };
 
 export default function AdminOrders() {
+  const activeLocale = useUserStore((state) => state.activeLocale);
+  const { t } = useI18n(activeLocale);
   const [orders, setOrders] = useState<AdminOrder[]>([]);
   const [filter, setFilter] = useState('');
   const [loading, setLoading] = useState(true);
@@ -24,7 +39,11 @@ export default function AdminOrders() {
 
   const load = async (status = filter) => {
     setLoading(true);
-    try { setOrders(await adminApi.getOrders(status || undefined)); } catch (e: any) { setError(e.message); }
+    try {
+      setOrders(await adminApi.getOrders(status || undefined));
+    } catch (e: any) {
+      setError(e.message);
+    }
     setLoading(false);
   };
 
@@ -33,118 +52,115 @@ export default function AdminOrders() {
   const changeStatus = async (order: AdminOrder, status: string) => {
     try {
       const updated = await adminApi.updateOrderStatus(order.id, status);
-      setOrders(os => os.map(o => o.id === updated.id ? updated : o));
+      setOrders(current => current.map(item => item.id === updated.id ? updated : item));
       setSelected(updated);
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) {
+      setError(e.message);
+    }
   };
 
-  const nextStatuses = (current: string): string[] => {
-    const flow: Record<string, string[]> = {
-      new: ['confirmed', 'cancelled'],
-      confirmed: ['ready', 'cancelled'],
-      ready: ['completed', 'cancelled'],
-      completed: [], cancelled: [],
-    };
-    return flow[current] || [];
-  };
+  const nextStatuses = (current: string): string[] => ({
+    new: ['confirmed', 'cancelled'],
+    confirmed: ['ready', 'cancelled'],
+    ready: ['completed', 'cancelled'],
+    completed: [],
+    cancelled: [],
+  }[current] || []);
+  const statusLabel = (status: string) => STATUS_LABEL_KEYS[status] ? t(STATUS_LABEL_KEYS[status]) : status;
+  const deliveryLabel = (deliveryType: string) => DELIVERY_LABEL_KEYS[deliveryType] ? t(DELIVERY_LABEL_KEYS[deliveryType]) : deliveryType;
 
   return (
-    <div style={{ paddingBottom: 80 }}>
-      {/* Status filter */}
-      <div className="chip-row" style={{ padding: '12px 16px 8px' }}>
-        {STATUSES.map(s => (
-          <div
-            key={s.id}
-            className={`chip ${filter === s.id ? 'active' : ''}`}
-            onClick={() => setFilter(s.id)}
-          >{s.label}</div>
-        ))}
-      </div>
+    <section>
+      <AdminPageHeader
+        title={t('admin.orders.title')}
+        subtitle={t('admin.orders.subtitle')}
+        meta={<span>{t('admin.orders.meta').replace('{count}', String(orders.length))}</span>}
+      />
 
-      <div className="container">
-        {error && <p style={{ color: 'var(--danger)', marginBottom: 12 }}>{error}</p>}
-        {loading && <div className="spinner" />}
-
-        {!loading && orders.length === 0 && (
-          <div className="empty-state">
-            <div className="icon">📋</div>
-            <h3>Нет заказов</h3>
-          </div>
-        )}
-
-        {orders.map(order => (
-          <div
-            key={order.id}
-            className="card"
-            onClick={() => setSelected(order)}
-            style={{ cursor: 'pointer', marginBottom: 8 }}
+      <div className="admin-filter-bar">
+        {STATUSES.map(status => (
+          <button
+            key={status.id}
+            className={`chip ${filter === status.id ? 'active' : ''}`}
+            type="button"
+            onClick={() => setFilter(status.id)}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-              <span style={{ fontWeight: 700 }}>#{order.id} — {order.customer_name}</span>
-              <span className={`status-badge status-${order.status}`}>{STATUS_LABELS[order.status]}</span>
-            </div>
-            <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 2 }}>
-              {order.customer_phone} · {order.payment_method}
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-                {order.delivery_type === 'inpost' ? '📦 InPost' : '🏪 Самовывоз'}
-              </span>
-              <span className="price-small">{Number(order.total).toFixed(2)} zł</span>
-            </div>
-          </div>
+            {t(status.labelKey)}
+          </button>
         ))}
       </div>
 
-      {/* Order detail bottom sheet */}
-      {selected && (
-        <div className="bottom-sheet-overlay" onClick={() => setSelected(null)}>
-          <div className="bottom-sheet" onClick={e => e.stopPropagation()}>
-            <div className="bottom-sheet-handle" />
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-              <h2 style={{ fontWeight: 700, fontSize: 20 }}>Заказ #{selected.id}</h2>
-              <span className={`status-badge status-${selected.status}`}>{STATUS_LABELS[selected.status]}</span>
-            </div>
-
-            <div style={{ fontSize: 14, marginBottom: 12 }}>
-              <div>👤 {selected.customer_name}</div>
-              <div>📱 {selected.customer_phone}</div>
-              <div>📧 {selected.customer_email}</div>
-              {selected.delivery_address && <div>📍 {selected.delivery_address}</div>}
-              {selected.scheduled_at && <div>📅 {new Date(selected.scheduled_at).toLocaleString('ru-RU')}</div>}
-              <div>💳 {selected.payment_method}</div>
-              {selected.comment && <div>💬 {selected.comment}</div>}
-            </div>
-
-            <div className="divider" />
-            <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>
-              Итого: {Number(selected.total).toFixed(2)} zł
-            </div>
-            <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>
-              Доставка: {Number(selected.delivery_cost).toFixed(2)} zł
-            </div>
-
-            {/* Status actions */}
-            {nextStatuses(selected.status).length > 0 && (
-              <div>
-                <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 14 }}>Изменить статус:</div>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  {nextStatuses(selected.status).map(s => (
-                    <button
-                      key={s}
-                      className={s === 'cancelled' ? 'btn btn-danger' : 'btn btn-primary'}
-                      style={{ flex: 1, padding: '10px 8px', fontSize: 14 }}
-                      onClick={() => changeStatus(selected, s)}
-                    >
-                      {STATUS_LABELS[s]}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+      {error && <p className="admin-message admin-message-error">{error}</p>}
+      {loading && <div className="spinner" />}
+      {!loading && orders.length === 0 && <AdminEmptyState title={t('admin.orders.emptyTitle')} description={t('admin.orders.emptyDescription')} />}
+      {!loading && orders.length > 0 && (
+        <div className="admin-cms-table">
+          {orders.map(order => (
+            <button key={order.id} className="admin-cms-row admin-order-row" type="button" onClick={() => setSelected(order)}>
+              <strong>#{order.id}</strong>
+              <span className="admin-cms-cell-main">
+                <strong>{order.customer_name}</strong>
+                <span>{order.customer_phone}</span>
+              </span>
+              <span className="muted">{deliveryLabel(order.delivery_type)}</span>
+              <AdminStatusBadge status={order.status} label={statusLabel(order.status)} />
+              <span className="price-small">{Number(order.total).toFixed(2)} zł</span>
+            </button>
+          ))}
         </div>
       )}
-    </div>
+
+      {selected && (
+        <AdminModal
+          title={t('admin.orders.orderTitle').replace('{id}', String(selected.id))}
+          subtitle={selected.customer_name}
+          onClose={() => setSelected(null)}
+          footer={nextStatuses(selected.status).length > 0 && (
+            <div className="admin-modal-actions">
+              {nextStatuses(selected.status).map(status => (
+                <button
+                  key={status}
+                  className={status === 'cancelled' ? 'admin-button admin-button-danger' : 'admin-button admin-button-primary'}
+                  type="button"
+                  onClick={() => changeStatus(selected, status)}
+                >
+                  {status === 'cancelled' ? <Icon name="x" size={16} /> : <Icon name="check" size={16} />}
+                  {statusLabel(status)}
+                </button>
+              ))}
+            </div>
+          )}
+        >
+          <div className="admin-detail-grid">
+            <div><span className="muted">{t('admin.orders.details.status')}</span><AdminStatusBadge status={selected.status} label={statusLabel(selected.status)} /></div>
+            <div><span className="muted">{t('admin.orders.details.phone')}</span><strong>{selected.customer_phone}</strong></div>
+            <div><span className="muted">{t('admin.orders.details.email')}</span><strong>{selected.customer_email || '-'}</strong></div>
+            <div><span className="muted">{t('admin.orders.details.delivery')}</span><strong>{deliveryLabel(selected.delivery_type)}</strong></div>
+            {selected.delivery_address && <div className="admin-detail-wide"><span className="muted">{t('admin.fields.address')}</span><strong>{selected.delivery_address}</strong></div>}
+            {selected.scheduled_at && <div><span className="muted">{t('admin.orders.details.time')}</span><strong>{new Date(selected.scheduled_at).toLocaleString('ru-RU')}</strong></div>}
+            <div><span className="muted">{t('admin.orders.details.payment')}</span><strong>{selected.payment_method}</strong></div>
+            {selected.comment && <div className="admin-detail-wide"><span className="muted">{t('admin.orders.details.comment')}</span><strong>{selected.comment}</strong></div>}
+          </div>
+
+          {selected.items?.length > 0 && (
+            <div className="admin-order-items">
+              <h4>{t('admin.orders.itemsTitle')}</h4>
+              {selected.items.map((item, index) => (
+                <div key={item.id || index} className="admin-order-item-row">
+                  <span>{item.product_name || item.name || t('admin.orders.itemFallback').replace('{index}', String(index + 1))}</span>
+                  <span className="muted">{item.quantity || 1} {t('common.piecesShort')}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="admin-order-total">
+            <span>{t('admin.orders.totals.products')}</span><strong>{Number(selected.products_total).toFixed(2)} zł</strong>
+            <span>{t('admin.orders.totals.delivery')}</span><strong>{Number(selected.delivery_cost).toFixed(2)} zł</strong>
+            <span>{t('admin.orders.totals.total')}</span><strong>{Number(selected.total).toFixed(2)} zł</strong>
+          </div>
+        </AdminModal>
+      )}
+    </section>
   );
 }

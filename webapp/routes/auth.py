@@ -3,12 +3,13 @@ from __future__ import annotations
 
 import base64
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.repositories.user import UserRepository
 from webapp.auth import verify_init_data
 from webapp.deps import get_session
+from webapp.errors import ErrorCode, api_error
 from webapp.schemas import AuthRequest, AuthResponse, SetLanguageRequest, UserSchema
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -21,7 +22,7 @@ async def auth(body: AuthRequest, session: AsyncSession = Depends(get_session)):
 
     tg_id = user_data.get("id")
     if not tg_id:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No user id in initData")
+        raise api_error(401, ErrorCode.AUTH_MISSING_USER_ID, "Missing user id")
 
     repo = UserRepository(session)
     user = await repo.upsert(
@@ -36,29 +37,3 @@ async def auth(body: AuthRequest, session: AsyncSession = Depends(get_session)):
 
     return AuthResponse(user=UserSchema.model_validate(user), token=token)
 
-
-@router.get("/me", response_model=UserSchema)
-async def get_me(
-    authorization: str = Depends(lambda authorization="": authorization),
-    session: AsyncSession = Depends(get_session),
-):
-    """Get current user profile."""
-    from webapp.deps import get_current_user
-    from fastapi import Header
-
-    # This route is handled via get_current_user dependency directly
-    # Simplified version:
-    raise HTTPException(status_code=501, detail="Use /api/user/me")
-
-
-@router.patch("/language", response_model=UserSchema)
-async def set_language(
-    body: SetLanguageRequest,
-    session: AsyncSession = Depends(get_session),
-    authorization: str = "",
-):
-    """Change user language preference."""
-    from fastapi import Header
-    from webapp.deps import get_current_user
-    # Handled in user router
-    raise HTTPException(status_code=501, detail="Use /api/user/language")

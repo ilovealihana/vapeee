@@ -38,11 +38,13 @@ class UserRepository:
         await self.session.refresh(user)
         return user
 
-    async def set_language(self, tg_id: int, language: str) -> None:
+    async def set_language(self, tg_id: int, language: str) -> User | None:
         user = await self.get_by_tg_id(tg_id)
         if user:
             user.language = language
             await self.session.commit()
+            await self.session.refresh(user)
+        return user
 
     async def update_contact(
         self, tg_id: int, phone: str | None = None, email: str | None = None

@@ -6,6 +6,100 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#0d0d0d" />
     <title>VapeShop</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script id="tailwind-config">
+      tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              colors: {
+                "tertiary-fixed": "#ffdbca",
+                "secondary-fixed": "#e2e2e5",
+                "on-tertiary-fixed-variant": "#6c3a1b",
+                "on-secondary-fixed": "#1a1c1e",
+                "surface": "#121415",
+                "on-primary-fixed": "#002022",
+                "on-surface-variant": "#bec8c9",
+                "on-tertiary-fixed": "#331200",
+                "secondary": "#c6c6c9",
+                "surface-container": "#1e2021",
+                "tertiary-container": "#c2815d",
+                "on-error": "#690005",
+                "error": "#ffb4ab",
+                "surface-variant": "#333536",
+                "surface-container-low": "#1a1c1d",
+                "on-surface": "#e2e2e3",
+                "on-primary-fixed-variant": "#004f53",
+                "on-secondary-container": "#b4b5b7",
+                "inverse-surface": "#e2e2e3",
+                "on-background": "#e2e2e3",
+                "tertiary": "#ffb68e",
+                "surface-bright": "#38393a",
+                "inverse-on-surface": "#2f3132",
+                "primary-container": "#569ba1",
+                "surface-tint": "#8dd2d7",
+                "secondary-container": "#454749",
+                "inverse-primary": "#1a686d",
+                "on-tertiary-container": "#481e02",
+                "background": "#121415",
+                "on-secondary-fixed-variant": "#454749",
+                "tertiary-fixed-dim": "#ffb68e",
+                "surface-dim": "#121415",
+                "secondary-fixed-dim": "#c6c6c9",
+                "on-secondary": "#2f3133",
+                "error-container": "#93000a",
+                "surface-container-high": "#282a2b",
+                "on-tertiary": "#502406",
+                "primary-fixed-dim": "#8dd2d7",
+                "outline-variant": "#3f4849",
+                "on-error-container": "#ffdad6",
+                "on-primary-container": "#002f32",
+                "primary": "#8dd2d7",
+                "outline": "#899393",
+                "surface-container-highest": "#333536",
+                "primary-fixed": "#a8eef4",
+                "on-primary": "#00373a",
+                "surface-container-lowest": "#0c0e0f"
+              },
+              borderRadius: {
+                DEFAULT: "0.25rem",
+                lg: "0.5rem",
+                xl: "0.75rem",
+                full: "9999px"
+              },
+              spacing: {
+                "stack-sm": "0.5rem",
+                "gutter-grid": "1rem",
+                "stack-md": "1rem",
+                "stack-lg": "1.5rem",
+                "margin-page": "1.25rem"
+              },
+              fontFamily: {
+                "label-sm": ["Inter"],
+                "body-lg": ["Inter"],
+                "label-lg": ["Inter"],
+                "headline-md": ["Inter"],
+                "headline-sm": ["Inter"],
+                "body-md": ["Inter"],
+                "headline-lg": ["Inter"],
+                "headline-lg-mobile": ["Inter"]
+              },
+              fontSize: {
+                "label-sm": ["12px", {"lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "500"}],
+                "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                "label-lg": ["14px", {"lineHeight": "20px", "fontWeight": "500"}],
+                "headline-md": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                "headline-sm": ["20px", {"lineHeight": "28px", "fontWeight": "500"}],
+                "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "600"}],
+                "headline-lg-mobile": ["28px", {"lineHeight": "36px", "fontWeight": "600"}]
+              }
+            }
+          }
+      };
+    </script>
     <!-- Telegram WebApp SDK -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
   </head>

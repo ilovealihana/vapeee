@@ -1,111 +1,97 @@
-# 🛒 VapeShop Telegram Bot
+# VapeShop Telegram Mini App
 
-Telegram-бот магазин для продажи вейпов, электронных сигарет и одноразок в Польше.
+Telegram Mini App для vape shop: клиентский интерфейс работает во frontend, backend работает как FastAPI API. Telegram bot используется только как outbound sender для уведомлений через Telegram Bot API.
 
 ## Стек
 
-- **Python 3.11+** + **aiogram 3**
-- **PostgreSQL** + **SQLAlchemy 2.0** (async)
-- **Redis** (FSM storage)
-- **Docker Compose**
-- Мультиязычность: 🇷🇺 RU / 🇵🇱 PL / 🇺🇦 UK (Fluent .ftl)
+- Python 3.11+
+- FastAPI
+- SQLAlchemy 2.0 async
+- Alembic
+- PostgreSQL для production
+- SQLite допустим для локальной разработки
+- Docker Compose для backend + PostgreSQL
+- Telegram Bot API через `httpx` для уведомлений
 
 ## Быстрый старт
 
-### 1. Клонирование и настройка окружения
+### 1. Настроить окружение
 
 ```bash
 cp .env.example .env
-# Отредактируй .env — вставь BOT_TOKEN и ADMIN_IDS
 ```
 
-### 2. Запуск через Docker
+Заполни в `.env` базовые значения:
+
+```text
+DATABASE_URL=postgresql+asyncpg://vapebot:vapebot_secret@localhost:5432/vapebot
+ADMIN_IDS=123456789,987654321
+WEBAPP_URL=https://your-vapeshop.vercel.app
+```
+
+`BOT_TOKEN` нужен для отправки Telegram-уведомлений. Если он пустой, backend стартует, а отправка уведомлений логирует ошибку и возвращает `False`.
+
+### 2. Запуск через Docker Compose
 
 ```bash
-docker-compose up --build
+docker compose up postgres backend
 ```
 
-Это запустит PostgreSQL, Redis и сам бот. Миграции применяются автоматически.
+Compose запускает PostgreSQL и FastAPI backend. Redis и отдельный bot process не нужны.
 
-### 3. Разработка без Docker
+### 3. Локальный запуск без Docker
 
 ```bash
 python -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
+.venv\Scripts\activate
 pip install -r requirements.txt
-cp .env.example .env        # заполни переменные
 alembic upgrade head
-python main.py
+uvicorn webapp.main:app --reload
 ```
 
-> Нужны запущенные PostgreSQL и Redis (или используй Docker только для них):
-> ```bash
-> docker-compose up postgres redis -d
-> ```
+## Переменные окружения
 
-## Структура проекта
+| Переменная | Назначение |
+| --- | --- |
+| `BOT_TOKEN` | Telegram bot token для outbound уведомлений |
+| `DATABASE_URL` | SQLAlchemy async database URL |
+| `ADMIN_IDS` | Comma-separated Telegram IDs project admins |
+| `INPOST_DELIVERY_COST` | Стоимость доставки InPost |
+| `SUPPORT_USERNAME` | Telegram username поддержки без `@` |
+| `WEBAPP_URL` | URL frontend Mini App |
 
-```
+## Структура
+
+```text
 tgs/
-├── bot/
-│   ├── handlers/       # Message & callback handlers
-│   │   └── admin/      # Admin panel handlers
-│   ├── keyboards/      # Keyboard builders
-│   ├── middlewares/    # DB session + locale injection
-│   ├── states/         # FSM states
-│   ├── filters/        # IsAdmin filter
-│   └── utils/          # Calendar widget, i18n, formatters
-├── db/
-│   ├── models/         # SQLAlchemy models
-│   └── repositories/   # DB query layer
-├── locales/            # Fluent .ftl files (ru/pl/uk)
-├── alembic/            # Migrations
-├── config.py           # Settings via pydantic-settings
-└── main.py             # Entry point
+  alembic/                # DB migrations
+  db/                     # SQLAlchemy models and repositories
+  docs/                   # Project documentation
+  frontend/               # Telegram Mini App frontend
+  tests/                  # unittest tests
+  webapp/                 # FastAPI backend
+    routes/               # API routes
+    services/             # Backend services, including notifications
+  config.py               # Settings via pydantic-settings
+  docker-compose.yml      # backend + PostgreSQL local services
 ```
 
-## Конфигурация (.env)
+## Уведомления
 
-| Переменная | Описание |
-|-----------|---------|
-| `BOT_TOKEN` | Токен от @BotFather |
-| `DATABASE_URL` | asyncpg URL к PostgreSQL |
-| `REDIS_URL` | Redis URL |
-| `ADMIN_IDS` | Telegram ID администраторов через запятую |
-| `INPOST_DELIVERY_COST` | Стоимость доставки InPost (PLN) |
-| `SUPPORT_USERNAME` | Telegram username поддержки |
-| `WEBHOOK_HOST` | Оставь пустым для polling (разработка) |
+Уведомления отправляются backend-ом через Telegram Bot API. Отправка best-effort: ошибки Telegram API или сети логируются и не должны откатывать бизнес-операции.
 
-## Функционал
-
-### 👤 Пользователь
-- `/start` — регистрация, главное меню
-- **🏪 Самовывоз** — города → точки → каталог → корзина
-- **📦 InPost** — каталог без привязки к точке
-- **🛒 Корзина** → оформление заказа:
-  - Тип доставки → Имя/Телефон/Email → [Адрес] → Дата → Время → Сводка → Оплата
-- **👤 Профиль** — история заказов, смена языка, поддержка
-
-### 🔧 Администратор (`/admin`)
-- **Товары** — добавить/скрыть товар, добавить вариант (вкус/цвет)
-- **Локации** — города и точки самовывоза
-- **Остатки** — обновить количество по точке + варианту
-- **Заказы** — просмотр новых заказов, смена статуса, уведомление клиента
-
-## Способы оплаты
-- 💵 Наличные (при получении)
-- 📱 Blik
-- 🇺🇦 Monobank (карта UA)
+Кнопки в уведомлениях должны вести на обычные Mini App routes, построенные от `WEBAPP_URL`.
 
 ## Миграции
 
 ```bash
-# Создать новую миграцию
 alembic revision --autogenerate -m "description"
-
-# Применить
 alembic upgrade head
-
-# Откатить
 alembic downgrade -1
+```
+
+## Тесты
+
+```bash
+python -m unittest discover -s tests -v
 ```

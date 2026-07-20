@@ -2,6 +2,8 @@
  * API client — wraps fetch with auth header and base URL.
  */
 
+import { parseApiError } from './errors';
+
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 function getInitData(): string {
@@ -25,8 +27,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   });
 
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail || `HTTP ${res.status}`);
+    throw await parseApiError(res);
   }
 
   if (res.status === 204) return undefined as T;
@@ -41,7 +42,7 @@ export interface User {
   username?: string;
   first_name: string;
   last_name?: string;
-  language: string;
+  language_code: string;
   phone?: string;
   email?: string;
   created_at: string;
@@ -158,10 +159,10 @@ export interface CreateOrderRequest {
 export const api = {
   auth: {
     me: () => request<User>('/api/user/me'),
-    setLanguage: (language: string) =>
+    setLanguage: (language_code: string) =>
       request<User>('/api/user/language', {
         method: 'PATCH',
-        body: JSON.stringify({ language }),
+        body: JSON.stringify({ language_code }),
       }),
   },
 

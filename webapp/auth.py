@@ -9,24 +9,23 @@ import hmac
 import json
 from urllib.parse import parse_qsl, unquote
 
-from fastapi import Header, HTTPException, status
-
 from config import settings
+from webapp.errors import ErrorCode, api_error
 
 
 def verify_init_data(init_data: str) -> dict:
     """
     Verify Telegram Mini App initData signature and return parsed user dict.
-    Raises HTTPException 401 if invalid.
+    Raises ApiError 401 if invalid.
     """
     try:
         parsed = dict(parse_qsl(init_data, keep_blank_values=True))
     except Exception:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid init_data format")
+        raise api_error(401, ErrorCode.AUTH_INVALID_INIT_DATA_FORMAT, "Invalid initData format")
 
     received_hash = parsed.pop("hash", None)
     if not received_hash:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing hash")
+        raise api_error(401, ErrorCode.AUTH_MISSING_HASH, "Missing hash")
 
     # Build data-check-string: sorted key=value pairs joined by \n
     data_check_string = "\n".join(
@@ -48,17 +47,17 @@ def verify_init_data(init_data: str) -> dict:
     ).hexdigest()
 
     if not hmac.compare_digest(expected_hash, received_hash):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid signature")
+        raise api_error(401, ErrorCode.AUTH_INVALID_SIGNATURE, "Invalid signature")
 
     # Parse user JSON
     user_str = parsed.get("user")
     if not user_str:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No user in init_data")
+        raise api_error(401, ErrorCode.AUTH_MISSING_USER, "Missing user")
 
     try:
         user_data = json.loads(unquote(user_str))
     except json.JSONDecodeError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid user JSON")
+        raise api_error(401, ErrorCode.AUTH_INVALID_USER_JSON, "Invalid user JSON")
 
     return user_data
 

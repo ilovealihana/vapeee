@@ -52,6 +52,12 @@ class CartRepository:
         await self.session.refresh(item)
         return item
 
+    async def get_item(self, cart_id: int, item_id: int) -> CartItem | None:
+        result = await self.session.execute(
+            select(CartItem).where(CartItem.id == item_id, CartItem.cart_id == cart_id)
+        )
+        return result.scalar_one_or_none()
+
     async def remove_item(self, cart_id: int, item_id: int) -> None:
         result = await self.session.execute(
             select(CartItem).where(CartItem.id == item_id, CartItem.cart_id == cart_id)
