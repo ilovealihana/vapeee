@@ -1,15 +1,16 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { adminApi } from '../../api/admin';
 import Icon from '../../components/Icon';
 import { useI18n } from '../../i18n';
 import { useUserStore } from '../../store/user';
 
-const ADMIN_IDS = (import.meta.env.VITE_ADMIN_IDS || '823810588').split(',').map((s: string) => Number(s.trim()));
 const tabs = [
   { path: '/admin/cities', labelKey: 'admin.layout.tabs.cities', icon: 'mapPin' as const },
   { path: '/admin/products', labelKey: 'admin.layout.tabs.products', icon: 'package' as const },
   { path: '/admin/stock', labelKey: 'admin.layout.tabs.stock', icon: 'box' as const },
   { path: '/admin/orders', labelKey: 'admin.layout.tabs.orders', icon: 'orders' as const },
+  { path: '/admin/staff', labelKey: 'admin.layout.tabs.staff', icon: 'user' as const },
 ];
 
 export default function AdminLayout() {
@@ -17,20 +18,30 @@ export default function AdminLayout() {
   const { t } = useI18n(activeLocale);
   const navigate = useNavigate();
   const [checking, setChecking] = useState(true);
+  const [hasAdminAccess, setHasAdminAccess] = useState(false);
+  const [adminRole, setAdminRole] = useState<string>('');
 
   useEffect(() => {
     (async () => {
       await fetchUser();
+      try {
+        const access = await adminApi.getAccess();
+        setHasAdminAccess(access.has_access);
+        setAdminRole(access.role || '');
+      } catch {
+        setHasAdminAccess(false);
+        setAdminRole('');
+      }
       setChecking(false);
     })();
   }, []);
 
   useEffect(() => {
-    if (!checking && user && !ADMIN_IDS.includes(user.tg_id)) navigate('/');
-  }, [checking, user]);
+    if (!checking && !hasAdminAccess) navigate('/');
+  }, [checking, hasAdminAccess]);
 
   if (checking) return <div className="page admin-page"><div className="spinner" /></div>;
-  if (!user || !ADMIN_IDS.includes(user.tg_id)) {
+  if (!user || !hasAdminAccess) {
     return (
       <div className="admin-cms-shell">
         <section className="admin-access-state">
@@ -65,7 +76,7 @@ export default function AdminLayout() {
           </div>
         </div>
         <div className="admin-cms-user">
-          <span className="tag tag-accent"><Icon name="shield" size={14} /> Admin</span>
+          <span className="tag tag-accent"><Icon name="shield" size={14} /> {adminRole || 'Admin'}</span>
           <span className="muted">ID {user.tg_id}</span>
         </div>
       </header>

@@ -4,8 +4,10 @@ from __future__ import annotations
 from typing import AsyncGenerator
 
 from fastapi import Depends, Header
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from db.models.staff import ROLE_PROJECT_ADMIN, StaffMember
 from db.session import async_session_maker
 from db.repositories.user import UserRepository
 from db.models.user import User
@@ -68,11 +70,9 @@ async def get_admin_user(
     authorization: str | None = Header(None),
     session: AsyncSession = Depends(get_session),
 ) -> User:
-    """Validate that current user is an admin (tg_id in ADMIN_IDS)."""
-    from config import settings
-
+    """Validate that current user is a project admin."""
     user = await get_current_user(authorization=authorization, session=session)
-    if user.tg_id not in settings.ADMIN_IDS:
+    if not await is_project_admin_user(user, session):
         raise api_error(403, ErrorCode.ADMIN_ACCESS_REQUIRED, "Admin access required")
     return user
 
@@ -83,3 +83,33 @@ async def get_admin_user_with_session(
 ) -> tuple[User, AsyncSession]:
     user = await get_admin_user(authorization=authorization, session=session)
     return user, session
+
+
+async def is_project_admin_user(user: User, session: AsyncSession) -> bool:
+    return await get_project_admin_role(user, session) == "project_admin"
+
+
+async def get_project_admin_role(user: User, session: AsyncSession) -> str | None:
+    from config import settings
+
+    if user.tg_id in settings.ADMIN_IDS:
+        return "project_admin"
+
+    result = await session.execute(
+        select(StaffMember.role).where(
+            StaffMember.tg_id == user.tg_id,
+            StaffMember.role == ROLE_PROJECT_ADMIN,
+            StaffMember.is_active == True,
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+async def get_project_admin_user(
+    authorization: str | None = Header(None),
+    session: AsyncSession = Depends(get_session),
+) -> User:
+    user = await get_current_user(authorization=authorization, session=session)
+    if not await is_project_admin_user(user, session):
+        raise api_error(403, ErrorCode.STAFF_PROJECT_ADMIN_REQUIRED, "Project admin access required")
+    return user

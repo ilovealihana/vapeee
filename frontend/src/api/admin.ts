@@ -69,9 +69,44 @@ export interface AdminOrder {
   items: any[];
 }
 
+export type AdminStaffRole = 'project_admin' | 'city_curator' | 'point_manager' | 'inpost_curator';
+
+export interface AdminStaffAssignment {
+  id: number;
+  city_id?: number;
+  city_name?: string;
+  location_id?: number;
+  location_name?: string;
+}
+
+export interface AdminStaffMember {
+  id: number;
+  tg_id: number;
+  role: AdminStaffRole;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  assignments: AdminStaffAssignment[];
+}
+
+export interface AdminStaffPayload {
+  tg_id?: number;
+  role?: AdminStaffRole;
+  is_active?: boolean;
+  city_ids?: number[];
+  location_ids?: number[];
+}
+
+export interface AdminAccess {
+  has_access: boolean;
+  role?: AdminStaffRole;
+}
+
 // ── API ────────────────────────────────────────────────────
 
 export const adminApi = {
+  getAccess: () => req<AdminAccess>('/api/admin/access'),
+
   // Cities
   getCities: () => req<AdminCity[]>('/api/admin/cities'),
   createCity: (data: { name: string; slug: string; manager_tg_id?: number }) =>
@@ -121,4 +156,13 @@ export const adminApi = {
   },
   updateOrderStatus: (id: number, status: string) =>
     req<AdminOrder>(`/api/admin/orders/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) }),
+
+  // Staff
+  getStaff: () => req<AdminStaffMember[]>('/api/admin/staff'),
+  createStaff: (data: Required<Pick<AdminStaffPayload, 'tg_id' | 'role' | 'city_ids' | 'location_ids'>>) =>
+    req<AdminStaffMember>('/api/admin/staff', { method: 'POST', body: JSON.stringify(data) }),
+  updateStaff: (id: number, data: AdminStaffPayload) =>
+    req<AdminStaffMember>(`/api/admin/staff/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteStaff: (id: number) =>
+    req<void>(`/api/admin/staff/${id}`, { method: 'DELETE' }),
 };

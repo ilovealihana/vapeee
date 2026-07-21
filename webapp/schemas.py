@@ -260,6 +260,47 @@ class AdminOrderSchema(OrderSchema):
     location_name: Optional[str] = None
 
 
+class StaffAssignmentSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    city_id: Optional[int] = None
+    city_name: Optional[str] = None
+    location_id: Optional[int] = None
+    location_name: Optional[str] = None
+
+
+class StaffMemberSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    tg_id: int
+    role: str
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+    assignments: List[StaffAssignmentSchema] = []
+
+
+class CreateStaffMemberRequest(BaseModel):
+    tg_id: int
+    role: str
+    city_ids: List[int] = []
+    location_ids: List[int] = []
+
+
+class UpdateStaffMemberRequest(BaseModel):
+    role: Optional[str] = None
+    is_active: Optional[bool] = None
+    city_ids: Optional[List[int]] = None
+    location_ids: Optional[List[int]] = None
+
+
+class AdminAccessSchema(BaseModel):
+    has_access: bool
+    role: Optional[str] = None
+
+
 # ── Auth ──────────────────────────────────────────────────
 
 class AuthRequest(BaseModel):

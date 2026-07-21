@@ -7,11 +7,14 @@ const projectRoot = new URL('../', import.meta.url);
 const css = readFileSync(new URL('index.css', root), 'utf8');
 const indexHtml = readFileSync(new URL('index.html', projectRoot), 'utf8');
 const mainSource = readFileSync(new URL('main.tsx', root), 'utf8');
+const appSource = readFileSync(new URL('App.tsx', root), 'utf8');
+const adminApiSource = readFileSync(new URL('api/admin.ts', root), 'utf8');
 const layoutSource = readFileSync(new URL('pages/admin/AdminLayout.tsx', root), 'utf8');
 const citiesSource = readFileSync(new URL('pages/admin/AdminCities.tsx', root), 'utf8');
 const productsSource = readFileSync(new URL('pages/admin/AdminProducts.tsx', root), 'utf8');
 const stockSource = readFileSync(new URL('pages/admin/AdminStock.tsx', root), 'utf8');
 const ordersSource = readFileSync(new URL('pages/admin/AdminOrders.tsx', root), 'utf8');
+const staffSource = readFileSync(new URL('pages/admin/AdminStaff.tsx', root), 'utf8');
 const uiSource = readFileSync(new URL('pages/admin/AdminUI.tsx', root), 'utf8');
 const checkoutSource = readFileSync(new URL('pages/Checkout.tsx', root), 'utf8');
 
@@ -36,6 +39,8 @@ test('admin layout is a separate CMS shell with readable navigation labels', () 
   assert.match(layoutSource, /t\(tab\.labelKey\)/);
   assert.match(layoutSource, /t\('admin\.layout\.title'\)/);
   assert.match(layoutSource, /t\('admin\.layout\.noAccessTitle'\)/);
+  assert.match(layoutSource, /adminApi\.getAccess/);
+  assert.doesNotMatch(layoutSource, /VITE_ADMIN_IDS/);
 });
 
 test('admin shared UI defaults use i18n keys', () => {
@@ -90,6 +95,36 @@ test('admin stock and orders pages use i18n keys for visible labels', () => {
   assert.doesNotMatch(stockSource, /title="Остатки"/);
   assert.doesNotMatch(ordersSource, /title="Заказы"/);
   assert.doesNotMatch(ordersSource, />Email<\/span>/);
+});
+
+test('admin staff page is routed and uses cms/i18n patterns', () => {
+  assert.match(layoutSource, /labelKey: 'admin\.layout\.tabs\.staff'/);
+  assert.match(appSource, /path="staff" element=\{<AdminStaff \/>\}/);
+  assert.match(staffSource, /AdminPageHeader/);
+  assert.match(staffSource, /AdminConfirmDialog/);
+  assert.match(staffSource, /useI18n\(activeLocale\)/);
+  assert.match(staffSource, /t\('admin\.staff\.title'\)/);
+  assert.match(staffSource, /adminApi\.getStaff/);
+  assert.match(staffSource, /adminApi\.createStaff/);
+  assert.match(staffSource, /adminApi\.updateStaff/);
+  assert.match(staffSource, /adminApi\.deleteStaff/);
+  assert.match(staffSource, /adminApi\.getCities/);
+  assert.match(staffSource, /adminApi\.getLocations/);
+  assert.match(staffSource, /role === 'city_curator'/);
+  assert.match(staffSource, /role === 'point_manager'/);
+  assert.match(staffSource, /city_ids/);
+  assert.match(staffSource, /location_ids/);
+  assert.doesNotMatch(staffSource, /<input[^>]+type="(?:number|tel|email)"/);
+});
+
+test('admin api exposes staff methods and types', () => {
+  assert.match(adminApiSource, /export interface AdminAccess/);
+  assert.match(adminApiSource, /getAccess: \(\) => req<AdminAccess>\('\/api\/admin\/access'\)/);
+  assert.match(adminApiSource, /export interface AdminStaffMember/);
+  assert.match(adminApiSource, /getStaff: \(\) => req<AdminStaffMember\[\]>\('\/api\/admin\/staff'\)/);
+  assert.match(adminApiSource, /createStaff:/);
+  assert.match(adminApiSource, /updateStaff:/);
+  assert.match(adminApiSource, /deleteStaff:/);
 });
 
 test('admin destructive actions use explicit confirmation dialogs instead of window confirm', () => {
