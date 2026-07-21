@@ -73,6 +73,14 @@ test('catalog city and location selection keep the copied catalog shell', () => 
   assert.match(appSource, /pathname\.startsWith\('\/cities\/'\) && pathname\.endsWith\('\/locations'\)/);
 });
 
+test('app scrolls to the top on route changes', () => {
+  assert.match(appSource, /<ScrollToTop \/>/);
+  assert.match(appSource, /function ScrollToTop\(\)/);
+  assert.match(appSource, /const \{ pathname, search \} = useLocation\(\);/);
+  assert.match(appSource, /window\.scrollTo\(\{ top: 0, left: 0, behavior: 'auto' \}\);/);
+  assert.match(appSource, /\}, \[pathname, search\]\);/);
+});
+
 test('catalog exposes a separate two and three column product grid selector', () => {
   assert.match(productsSource, /data-catalog-layout=\{layout\}/);
   assert.match(productsSource, /setLayout\('two'\)/);

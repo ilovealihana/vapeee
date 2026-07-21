@@ -36,6 +36,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
+      <ScrollToTop />
       <Routes>
         {/* User routes */}
         <Route path="/" element={<Home />} />
@@ -65,6 +66,16 @@ export default function App() {
       <BottomNavConditional />
     </BrowserRouter>
   );
+}
+
+function ScrollToTop() {
+  const { pathname, search } = useLocation();
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }, [pathname, search]);
+
+  return null;
 }
 
 function BottomNavConditional() {
