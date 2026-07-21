@@ -86,6 +86,15 @@ export default function Locations() {
             >
               {selected.catalog_available ? t('locations.openCatalog') : t('locations.comingSoon')}
             </button>
+            {selected.manager_tg_id && (
+              <a
+                className="btn btn-secondary"
+                href={`tg://user?id=${selected.manager_tg_id}`}
+                style={{ width: '100%', marginTop: 10 }}
+              >
+                {t('locations.contactManager')}
+              </a>
+            )}
           </div>
         </div>
       )}

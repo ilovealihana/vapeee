@@ -144,6 +144,9 @@ test('location types expose computed manager catalog availability', () => {
 test('customer location list blocks catalog for points without manager', () => {
   assert.match(locationsSource, /loc\.catalog_available/);
   assert.match(locationsSource, /selected\.catalog_available/);
+  assert.match(locationsSource, /selected\.manager_tg_id/);
+  assert.match(locationsSource, /tg:\/\/user\?id=\$\{selected\.manager_tg_id\}/);
+  assert.match(locationsSource, /t\('locations\.contactManager'\)/);
   assert.match(locationsSource, /t\('locations\.comingSoon'\)/);
   assert.match(locationsSource, /disabled=\{!selected\.catalog_available\}/);
   assert.match(locationsSource, /if \(!selected\.catalog_available\) return;/);
