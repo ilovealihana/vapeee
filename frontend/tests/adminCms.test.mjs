@@ -145,7 +145,11 @@ test('customer location list blocks catalog for points without manager', () => {
   assert.match(locationsSource, /loc\.catalog_available/);
   assert.match(locationsSource, /selected\.catalog_available/);
   assert.match(locationsSource, /selected\.manager_tg_id/);
-  assert.match(locationsSource, /tg:\/\/user\?id=\$\{selected\.manager_tg_id\}/);
+  assert.match(locationsSource, /function openTelegramUser/);
+  assert.match(locationsSource, /tg:\/\/openmessage\?user_id=\$\{tgId\}/);
+  assert.match(locationsSource, /tg:\/\/user\?id=\$\{tgId\}/);
+  assert.match(locationsSource, /window\.location\.href = openMessageUrl/);
+  assert.match(locationsSource, /onClick=\{\(\) => openTelegramUser\(selected\.manager_tg_id!\)\}/);
   assert.match(locationsSource, /t\('locations\.contactManager'\)/);
   assert.match(locationsSource, /t\('locations\.comingSoon'\)/);
   assert.match(locationsSource, /disabled=\{!selected\.catalog_available\}/);

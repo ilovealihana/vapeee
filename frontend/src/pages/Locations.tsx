@@ -20,6 +20,18 @@ function formatLastSold(dateStr: string | undefined, t: (key: string) => string)
   return t('locations.daysAgo').replace('{count}', String(Math.floor(h / 24)));
 }
 
+function openTelegramUser(tgId: number) {
+  const openMessageUrl = `tg://openmessage?user_id=${tgId}`;
+  const profileUrl = `tg://user?id=${tgId}`;
+  window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
+  window.location.href = openMessageUrl;
+  window.setTimeout(() => {
+    if (document.visibilityState === 'visible') {
+      window.location.href = profileUrl;
+    }
+  }, 350);
+}
+
 export default function Locations() {
   const { cityId } = useParams<{ cityId: string }>();
   const navigate = useNavigate();
@@ -87,13 +99,14 @@ export default function Locations() {
               {selected.catalog_available ? t('locations.openCatalog') : t('locations.comingSoon')}
             </button>
             {selected.manager_tg_id && (
-              <a
+              <button
+                type="button"
                 className="btn btn-secondary"
-                href={`tg://user?id=${selected.manager_tg_id}`}
+                onClick={() => openTelegramUser(selected.manager_tg_id!)}
                 style={{ width: '100%', marginTop: 10 }}
               >
                 {t('locations.contactManager')}
-              </a>
+              </button>
             )}
           </div>
         </div>
