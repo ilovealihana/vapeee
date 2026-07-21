@@ -29,7 +29,6 @@ export default function Cities() {
       <CopiedPageTitle activeTab="catalog" />
       <div className="copied-catalog-shell dark overflow-x-hidden">
         <main className="copied-selection-main">
-          <button className="back-btn" onClick={() => navigate('/')} aria-label={t('common.back')}><Icon name="chevronLeft" /></button>
           <section className="copied-selection-heading">
             <h1>{t('cities.title')}</h1>
             <p>{t('cities.subtitle')}</p>

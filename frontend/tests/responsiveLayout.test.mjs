@@ -73,6 +73,13 @@ test('catalog city and location selection keep the copied catalog shell', () => 
   assert.match(appSource, /pathname\.startsWith\('\/cities\/'\) && pathname\.endsWith\('\/locations'\)/);
 });
 
+test('catalog root does not show a back arrow before a city is selected', () => {
+  assert.doesNotMatch(citiesSource, /className="back-btn"/);
+  assert.doesNotMatch(citiesSource, /navigate\('\/'\)/);
+  assert.match(locationsSource, /className="back-btn"/);
+  assert.match(locationsSource, /navigate\('\/cities'\)/);
+});
+
 test('app scrolls to the top on route changes', () => {
   assert.match(appSource, /<ScrollToTop \/>/);
   assert.match(appSource, /function ScrollToTop\(\)/);
