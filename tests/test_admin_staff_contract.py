@@ -90,6 +90,104 @@ class AdminStaffContractTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(raised.exception.status_code, 409)
         self.assertEqual(raised.exception.code, ErrorCode.STAFF_ASSIGNMENT_DUPLICATE)
 
+    async def test_second_active_point_manager_for_same_location_is_rejected(self):
+        async with self.session_maker() as session:
+            city = City(name="Wroclaw", slug="wroclaw", is_active=True)
+            session.add(city)
+            await session.flush()
+            location = Location(city_id=city.id, name="Center", address="Main 1", is_active=True)
+            session.add(location)
+            await session.flush()
+
+            await admin_create_staff_member(
+                CreateStaffMemberRequest(tg_id=10101, role="point_manager", city_ids=[], location_ids=[location.id]),
+                actor=self.admin_actor,
+                session=session,
+            )
+
+            with self.assertRaises(ApiError) as raised:
+                await admin_create_staff_member(
+                    CreateStaffMemberRequest(
+                        tg_id=10102,
+                        role="point_manager",
+                        city_ids=[],
+                        location_ids=[location.id],
+                    ),
+                    actor=self.admin_actor,
+                    session=session,
+                )
+
+        self.assertEqual(raised.exception.status_code, 409)
+        self.assertEqual(raised.exception.code, ErrorCode.STAFF_ASSIGNMENT_DUPLICATE)
+
+    async def test_update_to_taken_point_manager_location_is_rejected(self):
+        async with self.session_maker() as session:
+            city = City(name="Wroclaw", slug="wroclaw", is_active=True)
+            session.add(city)
+            await session.flush()
+            location = Location(city_id=city.id, name="Center", address="Main 1", is_active=True)
+            session.add(location)
+            await session.flush()
+
+            await admin_create_staff_member(
+                CreateStaffMemberRequest(tg_id=10103, role="point_manager", city_ids=[], location_ids=[location.id]),
+                actor=self.admin_actor,
+                session=session,
+            )
+            candidate = await admin_create_staff_member(
+                CreateStaffMemberRequest(tg_id=10104, role="inpost_curator", city_ids=[], location_ids=[]),
+                actor=self.admin_actor,
+                session=session,
+            )
+
+            with self.assertRaises(ApiError) as raised:
+                await admin_update_staff_member(
+                    candidate.id,
+                    UpdateStaffMemberRequest(role="point_manager", is_active=True, city_ids=[], location_ids=[location.id]),
+                    actor=self.admin_actor,
+                    session=session,
+                )
+
+        self.assertEqual(raised.exception.status_code, 409)
+        self.assertEqual(raised.exception.code, ErrorCode.STAFF_ASSIGNMENT_DUPLICATE)
+
+    async def test_reactivating_inactive_point_manager_on_taken_location_is_rejected(self):
+        async with self.session_maker() as session:
+            city = City(name="Wroclaw", slug="wroclaw", is_active=True)
+            session.add(city)
+            await session.flush()
+            location = Location(city_id=city.id, name="Center", address="Main 1", is_active=True)
+            session.add(location)
+            await session.flush()
+
+            inactive = await admin_create_staff_member(
+                CreateStaffMemberRequest(tg_id=10105, role="point_manager", city_ids=[], location_ids=[location.id]),
+                actor=self.admin_actor,
+                session=session,
+            )
+            await admin_update_staff_member(
+                inactive.id,
+                UpdateStaffMemberRequest(is_active=False),
+                actor=self.admin_actor,
+                session=session,
+            )
+            await admin_create_staff_member(
+                CreateStaffMemberRequest(tg_id=10106, role="point_manager", city_ids=[], location_ids=[location.id]),
+                actor=self.admin_actor,
+                session=session,
+            )
+
+            with self.assertRaises(ApiError) as raised:
+                await admin_update_staff_member(
+                    inactive.id,
+                    UpdateStaffMemberRequest(is_active=True),
+                    actor=self.admin_actor,
+                    session=session,
+                )
+
+        self.assertEqual(raised.exception.status_code, 409)
+        self.assertEqual(raised.exception.code, ErrorCode.STAFF_ASSIGNMENT_DUPLICATE)
+
     async def test_update_replaces_single_role_and_assignments(self):
         async with self.session_maker() as session:
             city = City(name="Wroclaw", slug="wroclaw", is_active=True)

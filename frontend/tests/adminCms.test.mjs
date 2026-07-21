@@ -17,6 +17,8 @@ const ordersSource = readFileSync(new URL('pages/admin/AdminOrders.tsx', root), 
 const staffSource = readFileSync(new URL('pages/admin/AdminStaff.tsx', root), 'utf8');
 const uiSource = readFileSync(new URL('pages/admin/AdminUI.tsx', root), 'utf8');
 const checkoutSource = readFileSync(new URL('pages/Checkout.tsx', root), 'utf8');
+const apiClientSource = readFileSync(new URL('api/client.ts', root), 'utf8');
+const locationsSource = readFileSync(new URL('pages/Locations.tsx', root), 'utf8');
 
 test('admin panel uses a shared CMS component layer', () => {
   assert.equal(existsSync(new URL('pages/admin/AdminUI.tsx', root)), true);
@@ -60,7 +62,11 @@ test('admin city and product CRUD pages use i18n keys for visible labels', () =>
 
   assert.match(citiesSource, /t\('admin\.cities\.title'\)/);
   assert.match(citiesSource, /t\('admin\.cities\.deleteCityMessage'\)\.replace\('\{name\}', city\.name\)/);
-  assert.match(citiesSource, /t\('admin\.fields\.telegramManager'\)/);
+  assert.doesNotMatch(citiesSource, /t\('admin\.fields\.telegramManager'\)/);
+  assert.doesNotMatch(citiesSource, /curator_tg_username/);
+  assert.match(citiesSource, /loc\.manager_tg_id/);
+  assert.match(citiesSource, /t\('admin\.cities\.managerAssigned'\)\.replace\('\{id\}', String\(loc\.manager_tg_id\)\)/);
+  assert.match(citiesSource, /t\('admin\.cities\.managerMissing'\)/);
   assert.match(citiesSource, /onClick=\{\(\) => openLocationModal\(city\.id\)\}/);
   assert.match(citiesSource, /aria-label=\{t\('admin\.cities\.addLocation'\)\}/);
   assert.match(productsSource, /t\('admin\.products\.title'\)/);
@@ -125,6 +131,23 @@ test('admin api exposes staff methods and types', () => {
   assert.match(adminApiSource, /createStaff:/);
   assert.match(adminApiSource, /updateStaff:/);
   assert.match(adminApiSource, /deleteStaff:/);
+});
+
+test('location types expose computed manager catalog availability', () => {
+  for (const source of [adminApiSource, apiClientSource]) {
+    assert.match(source, /has_manager: boolean/);
+    assert.match(source, /manager_tg_id\?: number/);
+    assert.match(source, /catalog_available: boolean/);
+  }
+});
+
+test('customer location list blocks catalog for points without manager', () => {
+  assert.match(locationsSource, /loc\.catalog_available/);
+  assert.match(locationsSource, /selected\.catalog_available/);
+  assert.match(locationsSource, /t\('locations\.comingSoon'\)/);
+  assert.match(locationsSource, /disabled=\{!selected\.catalog_available\}/);
+  assert.match(locationsSource, /if \(!selected\.catalog_available\) return;/);
+  assert.doesNotMatch(locationsSource, /curator_tg_username/);
 });
 
 test('admin destructive actions use explicit confirmation dialogs instead of window confirm', () => {

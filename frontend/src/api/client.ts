@@ -94,6 +94,9 @@ export interface Location {
   description?: string;
   curator_tg_username?: string;
   is_active: boolean;
+  has_manager: boolean;
+  manager_tg_id?: number;
+  catalog_available: boolean;
   stock_summary?: LocationStockSummary;
 }
 

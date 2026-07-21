@@ -42,11 +42,22 @@ def _location_city_is_active(location) -> bool:
     return bool(city and getattr(city, "is_active", False))
 
 
+async def _location_schema(repo: CatalogRepository, location) -> LocationSchema:
+    manager = await repo.get_location_point_manager(location.id)
+    loc_schema = LocationSchema.model_validate(location)
+    loc_schema.has_manager = manager is not None
+    loc_schema.manager_tg_id = manager.tg_id if manager else None
+    loc_schema.catalog_available = loc_schema.has_manager
+    return loc_schema
+
+
 async def _get_active_catalog_location(repo: CatalogRepository, location_id: int):
     location = await repo.get_location(location_id)
     if not location:
         raise api_error(404, ErrorCode.CATALOG_LOCATION_NOT_FOUND, "Location not found")
     if not location.is_active or not _location_city_is_active(location):
+        raise api_error(404, ErrorCode.CATALOG_LOCATION_INACTIVE, "Location inactive")
+    if not await repo.get_location_point_manager(location_id):
         raise api_error(404, ErrorCode.CATALOG_LOCATION_INACTIVE, "Location inactive")
     return location
 
@@ -74,7 +85,7 @@ async def get_locations(city_id: int, session: AsyncSession = Depends(get_sessio
     result = []
     for loc in locations:
         summary = await repo.get_location_stock_summary(loc.id)
-        loc_schema = LocationSchema.model_validate(loc)
+        loc_schema = await _location_schema(repo, loc)
         loc_schema.stock_summary = LocationStockSummary(
             total_qty=summary["total_qty"],
             last_sold=summary["last_sold"],
@@ -88,7 +99,7 @@ async def get_location(location_id: int, session: AsyncSession = Depends(get_ses
     repo = CatalogRepository(session)
     loc = await _get_active_catalog_location(repo, location_id)
     summary = await repo.get_location_stock_summary(location_id)
-    loc_schema = LocationSchema.model_validate(loc)
+    loc_schema = await _location_schema(repo, loc)
     loc_schema.stock_summary = LocationStockSummary(
         total_qty=summary["total_qty"],
         last_sold=summary["last_sold"],

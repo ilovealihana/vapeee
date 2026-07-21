@@ -57,7 +57,9 @@ export default function Locations() {
                   <small>{loc.address}</small>
                   <small>{t('locations.lastSale')}: {formatLastSold(loc.stock_summary?.last_sold, t)}</small>
                 </span>
-                <span className="tag tag-accent">{loc.stock_summary?.total_qty ?? 0} {t('common.piecesShort')}</span>
+                <span className="tag tag-accent">
+                  {loc.catalog_available ? `${loc.stock_summary?.total_qty ?? 0} ${t('common.piecesShort')}` : t('locations.comingSoon')}
+                </span>
               </button>
             ))}
           </div>
@@ -74,14 +76,16 @@ export default function Locations() {
               <div><span className="muted">{t('locations.stock')}</span><br /><strong>{selected.stock_summary?.total_qty ?? 0} {t('common.piecesShort')}</strong></div>
               <div><span className="muted">{t('locations.activity')}</span><br /><strong>{formatLastSold(selected.stock_summary?.last_sold, t)}</strong></div>
             </div>
-            <button className="btn btn-primary" onClick={() => navigate(`/locations/${selected.id}/products`, { state: { cityId } })}>
-              {t('locations.openCatalog')}
+            <button
+              className="btn btn-primary"
+              disabled={!selected.catalog_available}
+              onClick={() => {
+                if (!selected.catalog_available) return;
+                navigate(`/locations/${selected.id}/products`, { state: { cityId } });
+              }}
+            >
+              {selected.catalog_available ? t('locations.openCatalog') : t('locations.comingSoon')}
             </button>
-            {selected.curator_tg_username && (
-              <a className="btn btn-secondary" style={{ width: '100%', marginTop: 10 }} href={`https://t.me/${selected.curator_tg_username}`}>
-                {t('locations.contactManager')}
-              </a>
-            )}
           </div>
         </div>
       )}

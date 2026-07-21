@@ -351,6 +351,46 @@ class DomainRouteErrorContractTest(unittest.TestCase):
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json()["code"], ErrorCode.CATALOG_CITY_NOT_FOUND)
 
+    def test_catalog_locations_return_active_points_without_manager_as_unavailable(self):
+        from webapp.routes import catalog as catalog_routes
+
+        original_repository = catalog_routes.CatalogRepository
+        location = self._location_with_city()
+
+        class FakeCatalogRepository:
+            def __init__(self, _session):
+                pass
+
+            async def get_city(self, _city_id):
+                return SimpleNamespace(is_active=True)
+
+            async def get_locations_for_city(self, _city_id):
+                return [location]
+
+            async def get_location_stock_summary(self, _location_id):
+                return {"total_qty": 0, "last_sold": None}
+
+            async def get_location_point_manager(self, _location_id):
+                return None
+
+        app = FastAPI()
+        register_error_handlers(app)
+        app.include_router(catalog_routes.router)
+        app.dependency_overrides[catalog_routes.get_session] = lambda: object()
+        catalog_routes.CatalogRepository = FakeCatalogRepository
+        try:
+            response = TestClient(app).get("/api/cities/1/locations")
+        finally:
+            catalog_routes.CatalogRepository = original_repository
+            app.dependency_overrides.clear()
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload[0]["id"], location.id)
+        self.assertFalse(payload[0]["has_manager"])
+        self.assertIsNone(payload[0]["manager_tg_id"])
+        self.assertFalse(payload[0]["catalog_available"])
+
     def test_catalog_missing_category_filter_returns_category_not_found(self):
         from webapp.routes import catalog as catalog_routes
 
@@ -413,6 +453,22 @@ class DomainRouteErrorContractTest(unittest.TestCase):
     def test_catalog_location_filter_under_inactive_city_returns_location_inactive(self):
         response = self._catalog_client_with_location(self._location_with_city(city_active=False)).get(
             "/api/products?location_id=999"
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json()["code"], ErrorCode.CATALOG_LOCATION_INACTIVE)
+
+    def test_catalog_location_without_point_manager_blocks_product_list(self):
+        response = self._catalog_client_with_location(self._location_with_city(), point_manager=None).get(
+            "/api/products?location_id=999"
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json()["code"], ErrorCode.CATALOG_LOCATION_INACTIVE)
+
+    def test_catalog_location_without_point_manager_blocks_product_detail(self):
+        response = self._catalog_client_with_location(self._location_with_city(), point_manager=None).get(
+            "/api/products/1?location_id=999"
         )
 
         self.assertEqual(response.status_code, 404)
@@ -634,6 +690,21 @@ class DomainRouteErrorContractTest(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json()["code"], ErrorCode.CART_VARIANT_UNAVAILABLE)
 
+    def test_cart_add_location_without_point_manager_returns_variant_unavailable(self):
+        response = self._cart_add_client(
+            variant=SimpleNamespace(product_id=1),
+            product=SimpleNamespace(is_active=True),
+            stock_qty=5,
+            point_manager=None,
+        ).post(
+            "/api/cart/items",
+            json={"variant_id": 10, "quantity": 1, "location_id": 1},
+            headers={"Authorization": "tma test"},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["code"], ErrorCode.CART_VARIANT_UNAVAILABLE)
+
     def test_cart_add_location_under_inactive_city_returns_variant_unavailable(self):
         response = self._cart_add_client(
             variant=SimpleNamespace(product_id=1),
@@ -747,6 +818,24 @@ class DomainRouteErrorContractTest(unittest.TestCase):
         self.assertFalse(state.cleared)
         self.assertFalse(state.committed)
 
+    def test_order_location_without_point_manager_returns_insufficient_stock_without_mutation(self):
+        state = SimpleNamespace(created=False, cleared=False, committed=False)
+        response = self._orders_client(
+            stock_qty=5,
+            state=state,
+            point_manager=None,
+        ).post(
+            "/api/orders",
+            json=self._valid_order_payload(),
+            headers={"Authorization": "tma test"},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["code"], ErrorCode.ORDER_INSUFFICIENT_STOCK)
+        self.assertFalse(state.created)
+        self.assertFalse(state.cleared)
+        self.assertFalse(state.committed)
+
     def test_order_location_under_inactive_city_returns_insufficient_stock_without_mutation(self):
         state = SimpleNamespace(created=False, cleared=False, committed=False)
         response = self._orders_client(
@@ -799,7 +888,7 @@ class DomainRouteErrorContractTest(unittest.TestCase):
                 self.assertEqual(response.status_code, 404)
                 self.assertEqual(response.json()["code"], code)
 
-    def _catalog_client_with_location(self, location, product_active=True):
+    def _catalog_client_with_location(self, location, product_active=True, point_manager=_DEFAULT_LOCATION):
         from webapp.routes import catalog as catalog_routes
 
         original_repository = catalog_routes.CatalogRepository
@@ -813,6 +902,13 @@ class DomainRouteErrorContractTest(unittest.TestCase):
 
             async def get_location_stock_summary(self, _location_id):
                 return {"total_qty": 0, "last_sold": None}
+
+            async def get_location_point_manager(self, _location_id):
+                if point_manager is None:
+                    return None
+                if point_manager is _DEFAULT_LOCATION:
+                    return SimpleNamespace(tg_id=12345)
+                return point_manager
 
             async def get_products(self, **_kwargs):
                 return []
@@ -855,6 +951,9 @@ class DomainRouteErrorContractTest(unittest.TestCase):
             description=None,
             curator_tg_username=None,
             is_active=True,
+            has_manager=False,
+            manager_tg_id=None,
+            catalog_available=False,
             city=SimpleNamespace(is_active=city_active),
         )
 
@@ -866,6 +965,7 @@ class DomainRouteErrorContractTest(unittest.TestCase):
         existing_quantity=0,
         state=None,
         location=_DEFAULT_LOCATION,
+        point_manager=_DEFAULT_LOCATION,
     ):
         import webapp.deps as deps
         from webapp.routes import cart as cart_routes
@@ -917,6 +1017,13 @@ class DomainRouteErrorContractTest(unittest.TestCase):
                 if location is _DEFAULT_LOCATION:
                     return SimpleNamespace(is_active=True, city=SimpleNamespace(is_active=True))
                 return location
+
+            async def get_location_point_manager(self, _location_id):
+                if point_manager is None:
+                    return None
+                if point_manager is _DEFAULT_LOCATION:
+                    return SimpleNamespace(tg_id=12345)
+                return point_manager
 
             async def get_variant(self, _variant_id):
                 return variant
@@ -1022,6 +1129,7 @@ class DomainRouteErrorContractTest(unittest.TestCase):
         state=None,
         location=_DEFAULT_LOCATION,
         product=None,
+        point_manager=_DEFAULT_LOCATION,
     ):
         import webapp.deps as deps
         from webapp.routes import cart as cart_routes
@@ -1087,6 +1195,13 @@ class DomainRouteErrorContractTest(unittest.TestCase):
                     return SimpleNamespace(is_active=True, city=SimpleNamespace(is_active=True))
                 return location
 
+            async def get_location_point_manager(self, _location_id):
+                if point_manager is None:
+                    return None
+                if point_manager is _DEFAULT_LOCATION:
+                    return SimpleNamespace(tg_id=12345)
+                return point_manager
+
             async def get_variant(self, _variant_id):
                 return variant
 
@@ -1144,7 +1259,7 @@ class DomainRouteErrorContractTest(unittest.TestCase):
         self.addCleanup(restore)
         return TestClient(app)
 
-    def _orders_client(self, stock_qty=None, state=None, location=_DEFAULT_LOCATION, product=None):
+    def _orders_client(self, stock_qty=None, state=None, location=_DEFAULT_LOCATION, product=None, point_manager=_DEFAULT_LOCATION):
         import webapp.deps as deps
         from webapp.routes import orders as orders_routes
 
@@ -1189,6 +1304,13 @@ class DomainRouteErrorContractTest(unittest.TestCase):
                 if location is _DEFAULT_LOCATION:
                     return SimpleNamespace(is_active=True, city=SimpleNamespace(is_active=True))
                 return location
+
+            async def get_location_point_manager(self, _location_id):
+                if point_manager is None:
+                    return None
+                if point_manager is _DEFAULT_LOCATION:
+                    return SimpleNamespace(tg_id=12345)
+                return point_manager
 
             async def get_product(self, _product_id):
                 if product is not None:

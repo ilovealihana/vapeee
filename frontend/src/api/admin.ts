@@ -38,7 +38,8 @@ export interface AdminCity {
 
 export interface AdminLocation {
   id: number; city_id: number; name: string; address: string;
-  description?: string; curator_tg_username?: string; is_active: boolean;
+  description?: string; is_active: boolean;
+  has_manager: boolean; manager_tg_id?: number; catalog_available: boolean;
 }
 
 export interface AdminVariant {
@@ -119,7 +120,7 @@ export const adminApi = {
   // Locations
   getLocations: (cityId: number) =>
     req<AdminLocation[]>(`/api/admin/cities/${cityId}/locations`),
-  createLocation: (cityId: number, data: { name: string; address: string; description?: string; curator_tg_username?: string }) =>
+  createLocation: (cityId: number, data: { name: string; address: string; description?: string }) =>
     req<AdminLocation>(`/api/admin/cities/${cityId}/locations`, { method: 'POST', body: JSON.stringify(data) }),
   updateLocation: (id: number, data: Partial<AdminLocation>) =>
     req<AdminLocation>(`/api/admin/locations/${id}`, { method: 'PUT', body: JSON.stringify(data) }),

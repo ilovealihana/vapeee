@@ -129,9 +129,55 @@ async def _staff_schema(session: AsyncSession, staff_id: int) -> StaffMemberSche
     )
 
 
+async def _location_point_manager(session: AsyncSession, location_id: int) -> StaffMember | None:
+    result = await session.execute(
+        select(StaffMember)
+        .join(StaffAssignment, StaffAssignment.staff_member_id == StaffMember.id)
+        .where(
+            StaffMember.role == ROLE_POINT_MANAGER,
+            StaffMember.is_active == True,
+            StaffAssignment.location_id == location_id,
+        )
+        .order_by(StaffMember.id)
+    )
+    return result.scalar_one_or_none()
+
+
+async def _location_schema(session: AsyncSession, location: Location) -> LocationSchema:
+    manager = await _location_point_manager(session, location.id)
+    schema = LocationSchema.model_validate(location)
+    schema.has_manager = manager is not None
+    schema.manager_tg_id = manager.tg_id if manager else None
+    schema.catalog_available = schema.has_manager and location.is_active
+    return schema
+
+
+async def _ensure_point_manager_locations_available(
+    session: AsyncSession,
+    location_ids: list[int],
+    current_staff_id: int | None,
+) -> None:
+    if not location_ids:
+        return
+    result = await session.execute(
+        select(StaffAssignment.location_id)
+        .join(StaffMember, StaffMember.id == StaffAssignment.staff_member_id)
+        .where(
+            StaffAssignment.location_id.in_(location_ids),
+            StaffMember.role == ROLE_POINT_MANAGER,
+            StaffMember.is_active == True,
+            StaffMember.id != current_staff_id,
+        )
+    )
+    if result.scalars().first() is not None:
+        raise api_error(409, ErrorCode.STAFF_ASSIGNMENT_DUPLICATE, "Local Point already has active manager")
+
+
 async def _build_assignments(
     session: AsyncSession,
+    member_id: int | None,
     role: str,
+    is_active: bool,
     city_ids: list[int] | None,
     location_ids: list[int] | None,
 ) -> list[StaffAssignment]:
@@ -166,6 +212,8 @@ async def _build_assignments(
         found = set(result.scalars().all())
         if found != set(location_ids):
             raise api_error(404, ErrorCode.STAFF_ASSIGNMENT_NOT_FOUND, "Staff assignment target not found")
+        if is_active:
+            await _ensure_point_manager_locations_available(session, location_ids, member_id)
         return [StaffAssignment(location_id=location_id) for location_id in location_ids]
 
     return []
@@ -175,10 +223,11 @@ async def _apply_staff_payload(
     session: AsyncSession,
     member: StaffMember,
     role: str,
+    is_active: bool,
     city_ids: list[int] | None,
     location_ids: list[int] | None,
 ) -> None:
-    assignments = await _build_assignments(session, role, city_ids, location_ids)
+    assignments = await _build_assignments(session, member.id, role, is_active, city_ids, location_ids)
     member.role = role
     await session.flush()
     await session.execute(delete(StaffAssignment).where(StaffAssignment.staff_member_id == member.id))
@@ -225,7 +274,7 @@ async def admin_create_staff_member(
     else:
         member.is_active = True
 
-    await _apply_staff_payload(session, member, body.role, body.city_ids, body.location_ids)
+    await _apply_staff_payload(session, member, body.role, True, body.city_ids, body.location_ids)
     await session.commit()
     return await _staff_schema(session, member.id)
 
@@ -249,14 +298,22 @@ async def admin_update_staff_member(
     ):
         raise api_error(403, ErrorCode.STAFF_CANNOT_DELETE_PROTECTED_ADMIN, "Cannot change protected admin")
 
-    if body.role is not None or body.city_ids is not None or body.location_ids is not None:
+    assignments_changed = body.role is not None or body.city_ids is not None or body.location_ids is not None
+    if assignments_changed:
         city_ids = body.city_ids if body.city_ids is not None else [
             assignment.city_id for assignment in member.assignments if assignment.city_id is not None
         ]
         location_ids = body.location_ids if body.location_ids is not None else [
             assignment.location_id for assignment in member.assignments if assignment.location_id is not None
         ]
-        await _apply_staff_payload(session, member, next_role, city_ids, location_ids)
+        next_active = body.is_active if body.is_active is not None else member.is_active
+        await _apply_staff_payload(session, member, next_role, next_active, city_ids, location_ids)
+
+    if not assignments_changed and body.is_active is True and member.role == ROLE_POINT_MANAGER:
+        location_ids = [
+            assignment.location_id for assignment in member.assignments if assignment.location_id is not None
+        ]
+        await _ensure_point_manager_locations_available(session, location_ids, member.id)
 
     if body.is_active is not None:
         member.is_active = body.is_active
@@ -355,7 +412,7 @@ async def admin_list_locations(
     result = await session.execute(
         select(Location).where(Location.city_id == city_id).order_by(Location.name)
     )
-    return [LocationSchema.model_validate(l) for l in result.scalars().all()]
+    return [await _location_schema(session, l) for l in result.scalars().all()]
 
 
 @router.post("/cities/{city_id}/locations", response_model=LocationSchema)
@@ -375,7 +432,7 @@ async def admin_create_location(
     session.add(loc)
     await session.commit()
     await session.refresh(loc)
-    return LocationSchema.model_validate(loc)
+    return await _location_schema(session, loc)
 
 
 @router.put("/locations/{location_id}", response_model=LocationSchema)
@@ -401,7 +458,7 @@ async def admin_update_location(
         loc.is_active = body.is_active
     await session.commit()
     await session.refresh(loc)
-    return LocationSchema.model_validate(loc)
+    return await _location_schema(session, loc)
 
 
 @router.delete("/locations/{location_id}", status_code=204)

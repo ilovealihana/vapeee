@@ -49,6 +49,7 @@ async def _validate_add_item_available(
         or not location.is_active
         or not city
         or not getattr(city, "is_active", False)
+        or not await catalog.get_location_point_manager(body.location_id)
     ):
         raise api_error(400, ErrorCode.CART_VARIANT_UNAVAILABLE, "Variant unavailable")
 

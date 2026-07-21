@@ -80,6 +80,9 @@ class LocationSchema(BaseModel):
     description: Optional[str]
     curator_tg_username: Optional[str]
     is_active: bool
+    has_manager: bool = False
+    manager_tg_id: Optional[int] = None
+    catalog_available: bool = False
     stock_summary: Optional[LocationStockSummary] = None
 
 

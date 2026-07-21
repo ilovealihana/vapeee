@@ -11,7 +11,7 @@ type ConfirmAction = {
   onConfirm: () => Promise<void>;
 };
 
-const emptyLocation = { name: '', address: '', description: '', curator_tg_username: '' };
+const emptyLocation = { name: '', address: '', description: '' };
 
 export default function AdminCities() {
   const activeLocale = useUserStore((state) => state.activeLocale);
@@ -115,7 +115,6 @@ export default function AdminCities() {
       name: loc.name,
       address: loc.address,
       description: loc.description || '',
-      curator_tg_username: loc.curator_tg_username || '',
     } : emptyLocation);
     setShowLocModal(true);
   };
@@ -193,7 +192,11 @@ export default function AdminCities() {
                       <span className="admin-cms-cell-main">
                         <strong>{loc.name}</strong>
                         <span>{loc.address}</span>
-                        {loc.curator_tg_username && <span>@{loc.curator_tg_username}</span>}
+                        <span>
+                          {loc.manager_tg_id
+                            ? t('admin.cities.managerAssigned').replace('{id}', String(loc.manager_tg_id))
+                            : t('admin.cities.managerMissing')}
+                        </span>
                       </span>
                       <AdminStatusBadge status={loc.is_active ? 'active' : 'hidden'} label={loc.is_active ? t('admin.status.activeFeminine') : t('admin.status.hiddenFeminine')} />
                       <div className="admin-row-actions">
@@ -244,7 +247,6 @@ export default function AdminCities() {
           <div className="input-group"><label className="input-label">{t('admin.fields.name')}</label><input className="input" value={locForm.name} onChange={e => setLocForm(f => ({ ...f, name: e.target.value }))} /></div>
           <div className="input-group"><label className="input-label">{t('admin.fields.address')}</label><input className="input" value={locForm.address} onChange={e => setLocForm(f => ({ ...f, address: e.target.value }))} /></div>
           <div className="input-group"><label className="input-label">{t('admin.fields.description')}</label><input className="input" value={locForm.description} onChange={e => setLocForm(f => ({ ...f, description: e.target.value }))} /></div>
-          <div className="input-group"><label className="input-label">{t('admin.fields.telegramManager')}</label><input className="input" value={locForm.curator_tg_username} onChange={e => setLocForm(f => ({ ...f, curator_tg_username: e.target.value }))} placeholder="username" /></div>
         </AdminModal>
       )}
 

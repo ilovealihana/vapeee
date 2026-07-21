@@ -83,6 +83,7 @@ async def _validate_order_location_available(
         or not location.is_active
         or not city
         or not getattr(city, "is_active", False)
+        or not await catalog.get_location_point_manager(location_id)
     ):
         raise api_error(400, ErrorCode.ORDER_INSUFFICIENT_STOCK, "Insufficient stock")
 

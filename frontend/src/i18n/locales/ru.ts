@@ -82,6 +82,7 @@ const ru = {
     stock: 'Остаток',
     activity: 'Активность',
     openCatalog: 'Открыть каталог точки',
+    comingSoon: 'Скоро открытие',
     contactManager: 'Связаться с менеджером',
   },
   productDetail: {
@@ -309,6 +310,8 @@ const ru = {
       editLocationTitle: 'Редактировать точку',
       newLocationTitle: 'Новая точка',
       locationModalSubtitle: 'Эти данные используются для сценария самовывоза.',
+      managerAssigned: 'Менеджер: ID {id}',
+      managerMissing: 'Нет менеджера',
     },
     products: {
       title: 'Товары',

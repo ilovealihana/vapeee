@@ -10,6 +10,7 @@ from db.models.location import Location
 from db.models.location_stock import LocationStock
 from db.models.product import Product
 from db.models.product_variant import ProductVariant
+from db.models.staff import ROLE_POINT_MANAGER, StaffAssignment, StaffMember
 
 
 class CatalogRepository:
@@ -50,6 +51,19 @@ class CatalogRepository:
             select(Location)
             .where(Location.id == location_id)
             .options(selectinload(Location.city))
+        )
+        return result.scalar_one_or_none()
+
+    async def get_location_point_manager(self, location_id: int) -> StaffMember | None:
+        result = await self.session.execute(
+            select(StaffMember)
+            .join(StaffAssignment, StaffAssignment.staff_member_id == StaffMember.id)
+            .where(
+                StaffMember.role == ROLE_POINT_MANAGER,
+                StaffMember.is_active == True,
+                StaffAssignment.location_id == location_id,
+            )
+            .order_by(StaffMember.id)
         )
         return result.scalar_one_or_none()
 
