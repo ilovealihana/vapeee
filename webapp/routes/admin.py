@@ -1,6 +1,8 @@
 """Admin API routes — protected by ADMIN_IDS check."""
 from __future__ import annotations
 
+import re
+
 from fastapi import APIRouter, Depends
 from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -71,6 +73,17 @@ def _validate_tg_id(tg_id: int) -> None:
         raise api_error(422, ErrorCode.STAFF_INVALID_TG_ID, "Telegram ID is invalid")
 
 
+def _normalize_username(username: str | None) -> str | None:
+    if username is None:
+        return None
+    normalized = username.strip().lstrip("@")
+    if not normalized:
+        return None
+    if not re.fullmatch(r"[A-Za-z0-9_]{5,32}", normalized):
+        raise api_error(422, ErrorCode.STAFF_INVALID_USERNAME, "Telegram username is invalid")
+    return normalized
+
+
 def _validate_role(role: str) -> None:
     if role not in STAFF_ROLES:
         raise api_error(422, ErrorCode.STAFF_ROLE_INVALID, "Staff role is invalid")
@@ -121,6 +134,7 @@ async def _staff_schema(session: AsyncSession, staff_id: int) -> StaffMemberSche
     return StaffMemberSchema(
         id=member.id,
         tg_id=member.tg_id,
+        username=member.username,
         role=member.role,
         is_active=member.is_active,
         created_at=member.created_at,
@@ -148,6 +162,7 @@ async def _location_schema(session: AsyncSession, location: Location) -> Locatio
     schema = LocationSchema.model_validate(location)
     schema.has_manager = manager is not None
     schema.manager_tg_id = manager.tg_id if manager else None
+    schema.manager_tg_username = getattr(manager, "username", None) if manager else None
     schema.catalog_available = schema.has_manager and location.is_active
     return schema
 
@@ -269,9 +284,15 @@ async def admin_create_staff_member(
         raise api_error(409, ErrorCode.STAFF_ASSIGNMENT_DUPLICATE, "Staff member already exists")
 
     if member is None:
-        member = StaffMember(tg_id=body.tg_id, role=body.role, is_active=True)
+        member = StaffMember(
+            tg_id=body.tg_id,
+            username=_normalize_username(body.username),
+            role=body.role,
+            is_active=True,
+        )
         session.add(member)
     else:
+        member.username = _normalize_username(body.username)
         member.is_active = True
 
     await _apply_staff_payload(session, member, body.role, True, body.city_ids, body.location_ids)
@@ -317,6 +338,8 @@ async def admin_update_staff_member(
 
     if body.is_active is not None:
         member.is_active = body.is_active
+    if "username" in body.model_fields_set:
+        member.username = _normalize_username(body.username)
 
     await session.commit()
     return await _staff_schema(session, member.id)

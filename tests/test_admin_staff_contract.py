@@ -57,6 +57,44 @@ class AdminStaffContractTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([item.city_id for item in created.assignments], [city_a.id, city_b.id])
         self.assertEqual([item.location_id for item in created.assignments], [None, None])
 
+    async def test_create_staff_member_stores_normalized_username(self):
+        async with self.session_maker() as session:
+            created = await admin_create_staff_member(
+                CreateStaffMemberRequest(
+                    tg_id=10014,
+                    username="@Manager_User",
+                    role="inpost_curator",
+                    city_ids=[],
+                    location_ids=[],
+                ),
+                actor=self.admin_actor,
+                session=session,
+            )
+
+        self.assertEqual(created.username, "Manager_User")
+
+    async def test_update_staff_member_clears_username(self):
+        async with self.session_maker() as session:
+            created = await admin_create_staff_member(
+                CreateStaffMemberRequest(
+                    tg_id=10015,
+                    username="manager_user",
+                    role="inpost_curator",
+                    city_ids=[],
+                    location_ids=[],
+                ),
+                actor=self.admin_actor,
+                session=session,
+            )
+            updated = await admin_update_staff_member(
+                created.id,
+                UpdateStaffMemberRequest(username=""),
+                actor=self.admin_actor,
+                session=session,
+            )
+
+        self.assertIsNone(updated.username)
+
     async def test_create_point_manager_requires_locations(self):
         async with self.session_maker() as session:
             with self.assertRaises(ApiError) as raised:

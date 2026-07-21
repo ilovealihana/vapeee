@@ -13,6 +13,7 @@ import { AdminConfirmDialog, AdminEmptyState, AdminModal, AdminPageHeader, Admin
 
 type StaffForm = {
   tg_id: string;
+  username: string;
   role: AdminStaffRole;
   city_ids: number[];
   location_ids: number[];
@@ -25,7 +26,7 @@ type ConfirmAction = {
 };
 
 const roles: AdminStaffRole[] = ['project_admin', 'city_curator', 'point_manager', 'inpost_curator'];
-const emptyForm: StaffForm = { tg_id: '', role: 'city_curator', city_ids: [], location_ids: [] };
+const emptyForm: StaffForm = { tg_id: '', username: '', role: 'city_curator', city_ids: [], location_ids: [] };
 
 export default function AdminStaff() {
   const activeLocale = useUserStore((state) => state.activeLocale);
@@ -98,6 +99,7 @@ export default function AdminStaff() {
     setEditStaff(member || null);
     setForm(member ? {
       tg_id: String(member.tg_id),
+      username: member.username || '',
       role: member.role,
       city_ids: member.assignments.map((assignment) => assignment.city_id).filter((id): id is number => Boolean(id)),
       location_ids: member.assignments.map((assignment) => assignment.location_id).filter((id): id is number => Boolean(id)),
@@ -110,6 +112,7 @@ export default function AdminStaff() {
       const role = form.role;
       const payload = {
         tg_id: Number(form.tg_id),
+        username: form.username.trim(),
         role,
         city_ids: role === 'city_curator' ? form.city_ids : [],
         location_ids: role === 'point_manager' ? form.location_ids : [],
@@ -176,6 +179,7 @@ export default function AdminStaff() {
             <div key={member.id} className="admin-cms-row admin-staff-row">
               <span className="admin-cms-cell-main">
                 <strong>{t('admin.staff.telegramIdLabel')} {member.tg_id}</strong>
+                {member.username && <span>@{member.username}</span>}
                 <span>{roleLabel(member.role)}</span>
                 <span>{assignmentSummary(member)}</span>
               </span>
@@ -229,6 +233,17 @@ export default function AdminStaff() {
               onChange={(event) => setForm((current) => ({ ...current, tg_id: event.target.value.replace(/\D/g, '') }))}
               placeholder={t('admin.staff.telegramIdPlaceholder')}
               disabled={Boolean(editStaff)}
+            />
+          </div>
+
+          <div className="input-group">
+            <label className="input-label">{t('admin.staff.telegramUsername')}</label>
+            <input
+              className="input"
+              type="text"
+              value={form.username}
+              onChange={(event) => setForm((current) => ({ ...current, username: event.target.value }))}
+              placeholder={t('admin.staff.telegramUsernamePlaceholder')}
             />
           </div>
 

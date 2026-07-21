@@ -24,6 +24,8 @@ class StaffMigrationTest(unittest.TestCase):
             inspector = inspect(engine)
             self.assertIn("staff_members", inspector.get_table_names())
             self.assertIn("staff_assignments", inspector.get_table_names())
+            staff_columns = {column["name"] for column in inspector.get_columns("staff_members")}
+            self.assertIn("username", staff_columns)
 
             with engine.begin() as conn:
                 conn.execute(text("PRAGMA foreign_keys=ON"))

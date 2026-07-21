@@ -14,6 +14,7 @@ interface TelegramWebApp {
   initDataUnsafe: any;
   expand: () => void;
   close: () => void;
+  openTelegramLink?: (url: string) => void;
   enableClosingConfirmation: () => void;
   MainButton: {
     text: string;

@@ -96,6 +96,7 @@ export interface Location {
   is_active: boolean;
   has_manager: boolean;
   manager_tg_id?: number;
+  manager_tg_username?: string;
   catalog_available: boolean;
   stock_summary?: LocationStockSummary;
 }

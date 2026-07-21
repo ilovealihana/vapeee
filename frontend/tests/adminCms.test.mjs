@@ -120,6 +120,9 @@ test('admin staff page is routed and uses cms/i18n patterns', () => {
   assert.match(staffSource, /role === 'point_manager'/);
   assert.match(staffSource, /city_ids/);
   assert.match(staffSource, /location_ids/);
+  assert.match(staffSource, /username: member\.username \|\| ''/);
+  assert.match(staffSource, /t\('admin\.staff\.telegramUsername'\)/);
+  assert.match(staffSource, /username: form\.username\.trim\(\)/);
   assert.doesNotMatch(staffSource, /<input[^>]+type="(?:number|tel|email)"/);
 });
 
@@ -127,6 +130,7 @@ test('admin api exposes staff methods and types', () => {
   assert.match(adminApiSource, /export interface AdminAccess/);
   assert.match(adminApiSource, /getAccess: \(\) => req<AdminAccess>\('\/api\/admin\/access'\)/);
   assert.match(adminApiSource, /export interface AdminStaffMember/);
+  assert.match(adminApiSource, /username\?: string/);
   assert.match(adminApiSource, /getStaff: \(\) => req<AdminStaffMember\[\]>\('\/api\/admin\/staff'\)/);
   assert.match(adminApiSource, /createStaff:/);
   assert.match(adminApiSource, /updateStaff:/);
@@ -137,6 +141,7 @@ test('location types expose computed manager catalog availability', () => {
   for (const source of [adminApiSource, apiClientSource]) {
     assert.match(source, /has_manager: boolean/);
     assert.match(source, /manager_tg_id\?: number/);
+    assert.match(source, /manager_tg_username\?: string/);
     assert.match(source, /catalog_available: boolean/);
   }
 });
@@ -144,12 +149,12 @@ test('location types expose computed manager catalog availability', () => {
 test('customer location list blocks catalog for points without manager', () => {
   assert.match(locationsSource, /loc\.catalog_available/);
   assert.match(locationsSource, /selected\.catalog_available/);
-  assert.match(locationsSource, /selected\.manager_tg_id/);
-  assert.match(locationsSource, /function openTelegramUser/);
-  assert.match(locationsSource, /tg:\/\/openmessage\?user_id=\$\{tgId\}/);
-  assert.match(locationsSource, /tg:\/\/user\?id=\$\{tgId\}/);
-  assert.match(locationsSource, /window\.location\.href = openMessageUrl/);
-  assert.match(locationsSource, /onClick=\{\(\) => openTelegramUser\(selected\.manager_tg_id!\)\}/);
+  assert.match(locationsSource, /selected\.manager_tg_username/);
+  assert.match(locationsSource, /function openTelegramUsername/);
+  assert.match(locationsSource, /https:\/\/t\.me\/\$\{username\}/);
+  assert.match(locationsSource, /openTelegramLink\(url\)/);
+  assert.match(locationsSource, /window\.location\.href = url/);
+  assert.match(locationsSource, /onClick=\{\(\) => openTelegramUsername\(selected\.manager_tg_username!\)\}/);
   assert.match(locationsSource, /t\('locations\.contactManager'\)/);
   assert.match(locationsSource, /t\('locations\.comingSoon'\)/);
   assert.match(locationsSource, /disabled=\{!selected\.catalog_available\}/);

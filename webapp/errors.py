@@ -79,6 +79,7 @@ class ErrorCode:
 
     STAFF_TG_ID_REQUIRED = "staff.tg_id_required"
     STAFF_INVALID_TG_ID = "staff.invalid_tg_id"
+    STAFF_INVALID_USERNAME = "staff.invalid_username"
     STAFF_ROLE_INVALID = "staff.role_invalid"
     STAFF_ASSIGNMENT_NOT_FOUND = "staff.assignment_not_found"
     STAFF_ASSIGNMENT_DUPLICATE = "staff.assignment_duplicate"

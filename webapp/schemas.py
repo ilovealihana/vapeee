@@ -82,6 +82,7 @@ class LocationSchema(BaseModel):
     is_active: bool
     has_manager: bool = False
     manager_tg_id: Optional[int] = None
+    manager_tg_username: Optional[str] = None
     catalog_available: bool = False
     stock_summary: Optional[LocationStockSummary] = None
 
@@ -278,6 +279,7 @@ class StaffMemberSchema(BaseModel):
 
     id: int
     tg_id: int
+    username: Optional[str] = None
     role: str
     is_active: bool
     created_at: datetime
@@ -287,12 +289,14 @@ class StaffMemberSchema(BaseModel):
 
 class CreateStaffMemberRequest(BaseModel):
     tg_id: int
+    username: Optional[str] = None
     role: str
     city_ids: List[int] = []
     location_ids: List[int] = []
 
 
 class UpdateStaffMemberRequest(BaseModel):
+    username: Optional[str] = None
     role: Optional[str] = None
     is_active: Optional[bool] = None
     city_ids: Optional[List[int]] = None

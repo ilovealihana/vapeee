@@ -47,6 +47,7 @@ async def _location_schema(repo: CatalogRepository, location) -> LocationSchema:
     loc_schema = LocationSchema.model_validate(location)
     loc_schema.has_manager = manager is not None
     loc_schema.manager_tg_id = manager.tg_id if manager else None
+    loc_schema.manager_tg_username = getattr(manager, "username", None) if manager else None
     loc_schema.catalog_available = loc_schema.has_manager
     return loc_schema
 

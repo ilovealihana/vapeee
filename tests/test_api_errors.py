@@ -391,6 +391,45 @@ class DomainRouteErrorContractTest(unittest.TestCase):
         self.assertIsNone(payload[0]["manager_tg_id"])
         self.assertFalse(payload[0]["catalog_available"])
 
+    def test_catalog_locations_return_point_manager_username_for_contact(self):
+        from webapp.routes import catalog as catalog_routes
+
+        original_repository = catalog_routes.CatalogRepository
+        location = self._location_with_city()
+
+        class FakeCatalogRepository:
+            def __init__(self, _session):
+                pass
+
+            async def get_city(self, _city_id):
+                return SimpleNamespace(is_active=True)
+
+            async def get_locations_for_city(self, _city_id):
+                return [location]
+
+            async def get_location_stock_summary(self, _location_id):
+                return {"total_qty": 0, "last_sold": None}
+
+            async def get_location_point_manager(self, _location_id):
+                return SimpleNamespace(tg_id=12345, username="manager_user")
+
+        app = FastAPI()
+        register_error_handlers(app)
+        app.include_router(catalog_routes.router)
+        app.dependency_overrides[catalog_routes.get_session] = lambda: object()
+        catalog_routes.CatalogRepository = FakeCatalogRepository
+        try:
+            response = TestClient(app).get("/api/cities/1/locations")
+        finally:
+            catalog_routes.CatalogRepository = original_repository
+            app.dependency_overrides.clear()
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload[0]["manager_tg_id"], 12345)
+        self.assertEqual(payload[0]["manager_tg_username"], "manager_user")
+        self.assertTrue(payload[0]["catalog_available"])
+
     def test_catalog_missing_category_filter_returns_category_not_found(self):
         from webapp.routes import catalog as catalog_routes
 

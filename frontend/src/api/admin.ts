@@ -39,7 +39,7 @@ export interface AdminCity {
 export interface AdminLocation {
   id: number; city_id: number; name: string; address: string;
   description?: string; is_active: boolean;
-  has_manager: boolean; manager_tg_id?: number; catalog_available: boolean;
+  has_manager: boolean; manager_tg_id?: number; manager_tg_username?: string; catalog_available: boolean;
 }
 
 export interface AdminVariant {
@@ -83,6 +83,7 @@ export interface AdminStaffAssignment {
 export interface AdminStaffMember {
   id: number;
   tg_id: number;
+  username?: string;
   role: AdminStaffRole;
   is_active: boolean;
   created_at: string;
@@ -92,6 +93,7 @@ export interface AdminStaffMember {
 
 export interface AdminStaffPayload {
   tg_id?: number;
+  username?: string;
   role?: AdminStaffRole;
   is_active?: boolean;
   city_ids?: number[];
@@ -160,7 +162,7 @@ export const adminApi = {
 
   // Staff
   getStaff: () => req<AdminStaffMember[]>('/api/admin/staff'),
-  createStaff: (data: Required<Pick<AdminStaffPayload, 'tg_id' | 'role' | 'city_ids' | 'location_ids'>>) =>
+  createStaff: (data: Required<Pick<AdminStaffPayload, 'tg_id' | 'role' | 'city_ids' | 'location_ids'>> & Pick<AdminStaffPayload, 'username'>) =>
     req<AdminStaffMember>('/api/admin/staff', { method: 'POST', body: JSON.stringify(data) }),
   updateStaff: (id: number, data: AdminStaffPayload) =>
     req<AdminStaffMember>(`/api/admin/staff/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
