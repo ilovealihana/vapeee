@@ -71,9 +71,11 @@ function BottomNavConditional() {
   const { pathname } = useLocation();
   if (
     pathname === '/' ||
+    pathname === '/cities' ||
     pathname === '/products' ||
     pathname === '/cart' ||
     pathname === '/profile' ||
+    (pathname.startsWith('/cities/') && pathname.endsWith('/locations')) ||
     (pathname.startsWith('/locations/') && pathname.endsWith('/products')) ||
     pathname.startsWith('/admin')
   ) return null;

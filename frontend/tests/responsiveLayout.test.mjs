@@ -6,6 +6,9 @@ const css = readFileSync(new URL('../src/index.css', import.meta.url), 'utf8');
 const productsSource = readFileSync(new URL('../src/pages/Products.tsx', import.meta.url), 'utf8');
 const cartSource = readFileSync(new URL('../src/pages/Cart.tsx', import.meta.url), 'utf8');
 const profileSource = readFileSync(new URL('../src/pages/Profile.tsx', import.meta.url), 'utf8');
+const citiesSource = readFileSync(new URL('../src/pages/Cities.tsx', import.meta.url), 'utf8');
+const locationsSource = readFileSync(new URL('../src/pages/Locations.tsx', import.meta.url), 'utf8');
+const appSource = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
 
 test('copied mini app layout fills the viewport without side gutters', () => {
   assert.match(css, /--copied-app-max-width:\s*100vw;/);
@@ -54,6 +57,20 @@ test('catalog filters stay in normal flow and do not overlap product cards', () 
   assert.doesNotMatch(productsSource, /<nav class="[^"]*\bz-40\b[^"]*"/);
   assert.doesNotMatch(productsSource, /<nav class="[^"]*\bbg-background\/95\b[^"]*"/);
   assert.match(productsSource, /<main className="[^"]*\bpt-2\b[^"]*"/);
+});
+
+test('catalog city and location selection keep the copied catalog shell', () => {
+  for (const source of [citiesSource, locationsSource]) {
+    assert.match(source, /CopiedSmokeBackground/);
+    assert.match(source, /CopiedTopBar/);
+    assert.match(source, /CopiedPageTitle activeTab="catalog"/);
+    assert.match(source, /CopiedBottomNav activeTab="catalog"/);
+    assert.match(source, /className="copied-catalog-shell dark overflow-x-hidden"/);
+    assert.doesNotMatch(source, /<div className="page">/);
+  }
+
+  assert.match(appSource, /pathname === '\/cities'/);
+  assert.match(appSource, /pathname\.startsWith\('\/cities\/'\) && pathname\.endsWith\('\/locations'\)/);
 });
 
 test('catalog exposes a separate two and three column product grid selector', () => {

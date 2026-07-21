@@ -170,6 +170,81 @@ body {
   scrollbar-width: none;
 }
 
+.copied-selection-main {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  min-height: 100vh;
+  padding: 12px 20px 132px;
+}
+
+.copied-selection-heading {
+  display: grid;
+  gap: 6px;
+  margin: 18px 0 18px;
+}
+
+.copied-selection-heading h1 {
+  margin: 0;
+  color: #e2e2e3;
+  font-size: 24px;
+  line-height: 1.12;
+  font-weight: 760;
+}
+
+.copied-selection-heading p {
+  margin: 0;
+  color: #a4a4a6;
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.copied-selection-list {
+  display: grid;
+  gap: 12px;
+}
+
+.copied-selection-card {
+  width: 100%;
+  min-height: 72px;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 24px;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid rgba(63, 72, 73, 0.42);
+  border-radius: 12px;
+  background: rgba(30, 32, 33, 0.78);
+  color: #e2e2e3;
+  text-align: left;
+  cursor: pointer;
+}
+
+.copied-selection-card strong,
+.copied-selection-card small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.copied-selection-card strong {
+  font-size: 15px;
+  line-height: 1.25;
+}
+
+.copied-selection-card small {
+  margin-top: 4px;
+  color: #a4a4a6;
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.copied-location-card {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
 .catalog-view-toggle {
   position: relative;
   flex: 0 0 auto;

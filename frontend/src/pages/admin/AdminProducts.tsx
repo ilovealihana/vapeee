@@ -247,7 +247,7 @@ export default function AdminProducts() {
               <input className="input" value={prodForm[field]} onChange={e => setProdForm(product => ({ ...product, [field]: e.target.value }))} />
             </div>
           ))}
-          <div className="input-group"><label className="input-label">{t('admin.fields.price')}</label><input className="input" type="number" step="0.01" value={prodForm.base_price} onChange={e => setProdForm(product => ({ ...product, base_price: e.target.value }))} /></div>
+          <div className="input-group"><label className="input-label">{t('admin.fields.price')}</label><input className="input" type="text" value={prodForm.base_price} onChange={e => setProdForm(product => ({ ...product, base_price: e.target.value }))} /></div>
           <div className="input-group"><label className="input-label">{t('admin.fields.descriptionRu')}</label><textarea className="input" value={prodForm.description_ru} onChange={e => setProdForm(product => ({ ...product, description_ru: e.target.value }))} /></div>
         </AdminModal>
       )}
@@ -265,7 +265,7 @@ export default function AdminProducts() {
               <input className="input" value={varForm[field]} onChange={e => setVarForm(variant => ({ ...variant, [field]: e.target.value }))} />
             </div>
           ))}
-          <div className="input-group"><label className="input-label">{t('admin.fields.variantPrice')}</label><input className="input" type="number" step="0.01" value={varForm.price_override} onChange={e => setVarForm(variant => ({ ...variant, price_override: e.target.value }))} /></div>
+          <div className="input-group"><label className="input-label">{t('admin.fields.variantPrice')}</label><input className="input" type="text" value={varForm.price_override} onChange={e => setVarForm(variant => ({ ...variant, price_override: e.target.value }))} /></div>
         </AdminModal>
       )}
 

@@ -1,8 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api, type Location } from '../api/client';
+import CopiedBottomNav from '../components/CopiedBottomNav';
+import CopiedPageTitle from '../components/CopiedPageTitle';
+import CopiedSmokeBackground from '../components/CopiedSmokeBackground';
+import CopiedTopBar from '../components/CopiedTopBar';
 import Icon from '../components/Icon';
 import { useI18n } from '../i18n';
+import { useCartStore } from '../store/cart';
 import { useUserStore } from '../store/user';
 
 function formatLastSold(dateStr: string | undefined, t: (key: string) => string): string {
@@ -21,6 +26,7 @@ export default function Locations() {
   const [locations, setLocations] = useState<Location[]>([]);
   const [selected, setSelected] = useState<Location | null>(null);
   const [loading, setLoading] = useState(true);
+  const itemCount = useCartStore((state) => state.itemCount);
   const activeLocale = useUserStore((state) => state.activeLocale);
   const { t } = useI18n(activeLocale);
 
@@ -31,30 +37,31 @@ export default function Locations() {
   }, [cityId]);
 
   return (
-    <div className="page">
-      <div className="page-header">
-        <button className="back-btn" onClick={() => navigate('/cities')}><Icon name="chevronLeft" /></button>
-        <div>
-          <h1 className="page-title">{t('locations.title')}</h1>
-          <p className="page-subtitle">{t('locations.subtitle')}</p>
-        </div>
-      </div>
-      <div className="container">
-        {loading && <div className="spinner" />}
-        <div style={{ display: 'grid', gap: 12 }}>
-          {locations.map((loc) => (
-            <button key={loc.id} className="card" onClick={() => setSelected(loc)} style={{ textAlign: 'left', cursor: 'pointer' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, marginBottom: 10 }}>
-                <div>
-                  <h2 style={{ fontSize: 18 }}>{loc.name}</h2>
-                  <p className="muted" style={{ marginTop: 4 }}>{loc.address}</p>
-                </div>
+    <>
+      <CopiedSmokeBackground />
+      <CopiedTopBar />
+      <CopiedPageTitle activeTab="catalog" />
+      <div className="copied-catalog-shell dark overflow-x-hidden">
+        <main className="copied-selection-main">
+          <button className="back-btn" onClick={() => navigate('/cities')} aria-label={t('common.back')}><Icon name="chevronLeft" /></button>
+          <section className="copied-selection-heading">
+            <h1>{t('locations.title')}</h1>
+            <p>{t('locations.subtitle')}</p>
+          </section>
+          {loading && <div className="spinner" />}
+          <div className="copied-selection-list">
+            {locations.map((loc) => (
+              <button key={loc.id} className="copied-selection-card copied-location-card" onClick={() => setSelected(loc)}>
+                <span>
+                  <strong>{loc.name}</strong>
+                  <small>{loc.address}</small>
+                  <small>{t('locations.lastSale')}: {formatLastSold(loc.stock_summary?.last_sold, t)}</small>
+                </span>
                 <span className="tag tag-accent">{loc.stock_summary?.total_qty ?? 0} {t('common.piecesShort')}</span>
-              </div>
-              <p className="muted" style={{ fontSize: 13 }}>{t('locations.lastSale')}: {formatLastSold(loc.stock_summary?.last_sold, t)}</p>
-            </button>
-          ))}
-        </div>
+              </button>
+            ))}
+          </div>
+        </main>
       </div>
 
       {selected && (
@@ -78,6 +85,7 @@ export default function Locations() {
           </div>
         </div>
       )}
-    </div>
+      <CopiedBottomNav activeTab="catalog" cartCount={itemCount()} />
+    </>
   );
 }

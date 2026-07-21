@@ -10,6 +10,7 @@ const productsSource = readFileSync(new URL('pages/admin/AdminProducts.tsx', roo
 const stockSource = readFileSync(new URL('pages/admin/AdminStock.tsx', root), 'utf8');
 const ordersSource = readFileSync(new URL('pages/admin/AdminOrders.tsx', root), 'utf8');
 const uiSource = readFileSync(new URL('pages/admin/AdminUI.tsx', root), 'utf8');
+const checkoutSource = readFileSync(new URL('pages/Checkout.tsx', root), 'utf8');
 
 test('admin panel uses a shared CMS component layer', () => {
   assert.equal(existsSync(new URL('pages/admin/AdminUI.tsx', root)), true);
@@ -120,4 +121,18 @@ test('admin stock inputs force readable dark colors in Telegram webview', () => 
   assert.match(css, /input\.input,\s*textarea\.input,\s*select\.input,\s*\.select\s*\{[\s\S]*-webkit-text-fill-color:\s*var\(--primary\)\s*!important;/);
   assert.match(css, /\.admin-qty-control input\.input\s*\{[\s\S]*background-color:\s*#101011\s*!important;/);
   assert.match(css, /\.admin-qty-control input\.input\s*\{[\s\S]*-webkit-text-fill-color:\s*var\(--primary\)\s*!important;/);
+});
+
+test('telegram webview forms avoid native light typed or input-mode fields', () => {
+  for (const source of [productsSource, stockSource, checkoutSource]) {
+    assert.doesNotMatch(source, /<input[^>]+type="(?:number|tel|email)"/);
+    assert.doesNotMatch(source, /<input[^>]+inputMode=/);
+    assert.doesNotMatch(source, /<input[^>]+pattern=/);
+  }
+
+  assert.match(productsSource, /type="text" value=\{prodForm\.base_price\}/);
+  assert.match(productsSource, /type="text" value=\{varForm\.price_override\}/);
+  assert.match(stockSource, /type="text" value=\{qty\(row\)\}/);
+  assert.match(checkoutSource, /type="text" placeholder="\+48 500 123 456"/);
+  assert.match(checkoutSource, /type="text" \/>/);
 });
