@@ -115,16 +115,17 @@ async def add_item(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
+    user_id = user.id
     if body.quantity <= 0:
         raise api_error(422, ErrorCode.CART_INVALID_QUANTITY, "Invalid quantity")
     repo = CartRepository(session)
-    existing_cart = await repo.get_by_user_id(user.id)
+    existing_cart = await repo.get_by_user_id(user_id)
     existing_quantity = sum(
         item.quantity for item in existing_cart.items if item.variant_id == body.variant_id
     ) if existing_cart else 0
     catalog = CatalogRepository(session)
     await _validate_add_item_available(body, existing_quantity + body.quantity, catalog, session)
-    cart = await repo.get_or_create(user.id, body.location_id)
+    cart = await repo.get_or_create(user_id, body.location_id)
 
     # Update location if switching
     if cart.location_id != body.location_id:
@@ -134,7 +135,7 @@ async def add_item(
 
     # Reload
     session.expire_all()
-    cart = await repo.get_by_user_id(user.id)
+    cart = await repo.get_by_user_id(user_id)
     return await _build_cart_schema(cart, session)
 
 
@@ -145,10 +146,11 @@ async def update_item(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
+    user_id = user.id
     if body.quantity <= 0:
         raise api_error(422, ErrorCode.CART_INVALID_QUANTITY, "Invalid quantity")
     repo = CartRepository(session)
-    cart = await repo.get_by_user_id(user.id)
+    cart = await repo.get_by_user_id(user_id)
     if not cart:
         raise api_error(404, ErrorCode.CART_ITEM_NOT_FOUND, "Cart item not found")
     item = await repo.get_item(cart.id, item_id)
@@ -169,7 +171,7 @@ async def update_item(
 
     await repo.set_item_quantity(cart.id, item_id, body.quantity)
     session.expire_all()
-    cart = await repo.get_by_user_id(user.id)
+    cart = await repo.get_by_user_id(user_id)
     return await _build_cart_schema(cart, session)
 
 
@@ -179,8 +181,9 @@ async def remove_item(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
+    user_id = user.id
     repo = CartRepository(session)
-    cart = await repo.get_by_user_id(user.id)
+    cart = await repo.get_by_user_id(user_id)
     if not cart:
         raise api_error(404, ErrorCode.CART_ITEM_NOT_FOUND, "Cart item not found")
     item = await repo.get_item(cart.id, item_id)
@@ -189,7 +192,7 @@ async def remove_item(
 
     await repo.remove_item(cart.id, item_id)
     session.expire_all()
-    cart = await repo.get_by_user_id(user.id)
+    cart = await repo.get_by_user_id(user_id)
     return await _build_cart_schema(cart, session)
 
 

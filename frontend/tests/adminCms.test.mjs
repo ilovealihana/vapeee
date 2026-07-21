@@ -116,8 +116,8 @@ test('admin css defines dense cms composition without user product-card reuse', 
 
 test('admin stock inputs force readable dark colors in Telegram webview', () => {
   assert.match(css, /button,\s*input,\s*textarea,\s*select\s*\{[\s\S]*color-scheme:\s*dark;/);
-  assert.match(css, /\.input,\s*\.select\s*\{[\s\S]*background-color:\s*var\(--surface\);/);
-  assert.match(css, /\.input,\s*\.select\s*\{[\s\S]*-webkit-text-fill-color:\s*var\(--primary\);/);
-  assert.match(css, /\.admin-qty-control \.input\s*\{[\s\S]*background-color:\s*#101011;/);
-  assert.match(css, /\.admin-qty-control \.input\s*\{[\s\S]*-webkit-text-fill-color:\s*var\(--primary\);/);
+  assert.match(css, /input\.input,\s*textarea\.input,\s*select\.input,\s*\.select\s*\{[\s\S]*background-color:\s*var\(--surface\)\s*!important;/);
+  assert.match(css, /input\.input,\s*textarea\.input,\s*select\.input,\s*\.select\s*\{[\s\S]*-webkit-text-fill-color:\s*var\(--primary\)\s*!important;/);
+  assert.match(css, /\.admin-qty-control input\.input\s*\{[\s\S]*background-color:\s*#101011\s*!important;/);
+  assert.match(css, /\.admin-qty-control input\.input\s*\{[\s\S]*-webkit-text-fill-color:\s*var\(--primary\)\s*!important;/);
 });

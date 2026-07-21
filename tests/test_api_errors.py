@@ -528,6 +528,25 @@ class DomainRouteErrorContractTest(unittest.TestCase):
         self.assertEqual(response.json()["code"], ErrorCode.CART_INSUFFICIENT_STOCK)
         self.assertFalse(state.set_item_quantity_called)
 
+    def test_cart_update_reloads_with_captured_user_id_after_expire(self):
+        state = SimpleNamespace(
+            set_item_quantity_called=False,
+            raise_user_id_after_expire=True,
+            expired=False,
+        )
+        response = self._cart_update_available_client(
+            stock_qty=5,
+            state=state,
+        ).patch(
+            "/api/cart/items/999",
+            json={"quantity": 2},
+            headers={"Authorization": "tma test"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(state.set_item_quantity_called)
+        self.assertTrue(state.expired)
+
     def test_cart_add_missing_variant_returns_variant_unavailable(self):
         response = self._cart_add_client(variant=None, product=None, stock_qty=5).post(
             "/api/cart/items",
@@ -1026,12 +1045,23 @@ class DomainRouteErrorContractTest(unittest.TestCase):
         cart_item = SimpleNamespace(id=999, variant_id=10, variant=variant, quantity=1)
         cart = SimpleNamespace(id=1, user_id=1, location_id=1, items=[cart_item])
 
+        class ExpiringUpdateUser:
+            @property
+            def id(self):
+                if (
+                    state is not None
+                    and getattr(state, "raise_user_id_after_expire", False)
+                    and getattr(state, "expired", False)
+                ):
+                    raise AssertionError("user.id must be captured before session.expire_all()")
+                return 1
+
         class FakeUserRepository:
             def __init__(self, _session):
                 pass
 
             async def upsert(self, **_kwargs):
-                return SimpleNamespace(id=1)
+                return ExpiringUpdateUser()
 
         class FakeCartRepository:
             def __init__(self, _session):
@@ -1089,6 +1119,8 @@ class DomainRouteErrorContractTest(unittest.TestCase):
                 return FakeResult()
 
             def expire_all(self):
+                if state is not None:
+                    state.expired = True
                 return None
 
         app = FastAPI()
