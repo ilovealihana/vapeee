@@ -692,6 +692,24 @@ class DomainRouteErrorContractTest(unittest.TestCase):
         self.assertFalse(state.cleared)
         self.assertFalse(state.committed)
 
+    def test_order_inactive_product_in_existing_cart_returns_insufficient_stock_without_mutation(self):
+        state = SimpleNamespace(created=False, cleared=False, committed=False)
+        response = self._orders_client(
+            stock_qty=5,
+            state=state,
+            product=SimpleNamespace(base_price=Decimal("10.00"), is_active=False),
+        ).post(
+            "/api/orders",
+            json=self._valid_order_payload(),
+            headers={"Authorization": "tma test"},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["code"], ErrorCode.ORDER_INSUFFICIENT_STOCK)
+        self.assertFalse(state.created)
+        self.assertFalse(state.cleared)
+        self.assertFalse(state.committed)
+
     def test_order_inactive_location_returns_insufficient_stock_without_mutation(self):
         state = SimpleNamespace(created=False, cleared=False, committed=False)
         response = self._orders_client(
@@ -1094,7 +1112,7 @@ class DomainRouteErrorContractTest(unittest.TestCase):
         self.addCleanup(restore)
         return TestClient(app)
 
-    def _orders_client(self, stock_qty=None, state=None, location=_DEFAULT_LOCATION):
+    def _orders_client(self, stock_qty=None, state=None, location=_DEFAULT_LOCATION, product=None):
         import webapp.deps as deps
         from webapp.routes import orders as orders_routes
 
@@ -1141,7 +1159,9 @@ class DomainRouteErrorContractTest(unittest.TestCase):
                 return location
 
             async def get_product(self, _product_id):
-                return SimpleNamespace(base_price=Decimal("10.00"))
+                if product is not None:
+                    return product
+                return SimpleNamespace(base_price=Decimal("10.00"), is_active=True)
 
         class FakeOrderRepository:
             def __init__(self, _session):

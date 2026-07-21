@@ -173,7 +173,9 @@ async def admin_list_products(
     _=Depends(get_admin_user),
     session: AsyncSession = Depends(get_session),
 ):
-    result = await session.execute(select(Product).order_by(Product.name_ru))
+    result = await session.execute(
+        select(Product).where(Product.is_active == True).order_by(Product.name_ru)
+    )
     return [ProductSchema.model_validate(p) for p in result.scalars().all()]
 
 
@@ -286,34 +288,49 @@ async def admin_get_stock(
     _=Depends(get_admin_user),
     session: AsyncSession = Depends(get_session),
 ):
-    """Return all stock rows with city/location/product/variant names."""
+    """Return editable stock matrix for every active location and active variant."""
     from sqlalchemy.orm import selectinload
-    result = await session.execute(
+
+    stock_result = await session.execute(
         select(LocationStock)
         .options(
             selectinload(LocationStock.location),
             selectinload(LocationStock.variant),
         )
     )
+    stock_by_location_variant = {
+        (stock.location_id, stock.variant_id): stock.quantity
+        for stock in stock_result.scalars().all()
+    }
+
+    location_result = await session.execute(
+        select(Location, City)
+        .join(City, City.id == Location.city_id)
+        .where(Location.is_active == True, City.is_active == True)
+        .order_by(City.name, Location.name)
+    )
+    locations = location_result.all()
+
+    variant_result = await session.execute(
+        select(ProductVariant, Product)
+        .join(Product, Product.id == ProductVariant.product_id)
+        .where(Product.is_active == True)
+        .order_by(Product.name_ru, ProductVariant.name_ru)
+    )
+    variants = variant_result.all()
+
     rows = []
-    for s in result.scalars().all():
-        loc = s.location
-        var = s.variant
-        # Get city
-        city_result = await session.execute(select(City).where(City.id == loc.city_id))
-        city = city_result.scalar_one_or_none()
-        # Get product
-        prod_result = await session.execute(select(Product).where(Product.id == var.product_id))
-        prod = prod_result.scalar_one_or_none()
-        rows.append(StockRow(
-            location_id=s.location_id,
-            location_name=loc.name if loc else "?",
-            city_name=city.name if city else "?",
-            variant_id=s.variant_id,
-            variant_name=var.name_ru if var else "?",
-            product_name=prod.name_ru if prod else "?",
-            quantity=s.quantity,
-        ))
+    for loc, city in locations:
+        for var, prod in variants:
+            rows.append(StockRow(
+                location_id=loc.id,
+                location_name=loc.name,
+                city_name=city.name,
+                variant_id=var.id,
+                variant_name=var.name_ru,
+                product_name=prod.name_ru,
+                quantity=stock_by_location_variant.get((loc.id, var.id), 0),
+            ))
     return rows
 
 

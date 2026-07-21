@@ -81,7 +81,13 @@ class CatalogRepository:
             select(
                 func.sum(LocationStock.quantity).label("total_qty"),
                 func.max(LocationStock.last_sold_at).label("last_sold"),
-            ).where(LocationStock.location_id == location_id)
+            )
+            .join(ProductVariant, ProductVariant.id == LocationStock.variant_id)
+            .join(Product, Product.id == ProductVariant.product_id)
+            .where(
+                LocationStock.location_id == location_id,
+                Product.is_active == True,
+            )
         )
         row = result.one()
         return {"total_qty": row.total_qty or 0, "last_sold": row.last_sold}

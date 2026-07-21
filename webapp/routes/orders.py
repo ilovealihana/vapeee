@@ -124,6 +124,8 @@ async def create_order(
     for item in cart.items:
         variant = item.variant
         product = await catalog.get_product(variant.product_id) if variant else None
+        if not variant or not product or not product.is_active:
+            raise api_error(400, ErrorCode.ORDER_INSUFFICIENT_STOCK, "Insufficient stock")
         price = Decimal(str(variant.price_override or (product.base_price if product else 0))) if variant else Decimal("0")
         subtotal = price * item.quantity
         products_total += subtotal
