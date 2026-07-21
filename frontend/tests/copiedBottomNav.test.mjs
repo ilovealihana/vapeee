@@ -111,6 +111,15 @@ test('copied shared bars render labels through i18n keys', () => {
   assert.match(topBarSource, /t\('nav\.notifications'\)/);
 });
 
+test('home and profile pass cart item count to copied bottom navigation', () => {
+  for (const path of ['../src/pages/Home.tsx', '../src/pages/Profile.tsx']) {
+    const source = readSource(path);
+    assert.match(source, /useCartStore/);
+    assert.match(source, /itemCount/);
+    assert.match(source, /<CopiedBottomNav activeTab="(?:home|profile)" cartCount=\{itemCount\(\)\} \/>/);
+  }
+});
+
 test('copied shared label keys resolve to ru dictionary strings', async () => {
   const { module, cleanup } = await importI18nModule();
   try {

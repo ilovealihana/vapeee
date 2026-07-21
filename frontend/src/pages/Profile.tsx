@@ -5,6 +5,7 @@ import CopiedPageTitle from '../components/CopiedPageTitle';
 import CopiedSmokeBackground from '../components/CopiedSmokeBackground';
 import CopiedTopBar from '../components/CopiedTopBar';
 import { useI18n } from '../i18n';
+import { useCartStore } from '../store/cart';
 import { useUserStore } from '../store/user';
 import { selectProfileLanguage } from './profileInteractions';
 
@@ -218,6 +219,7 @@ function buildProfileMarkup(t: (key: string) => string) {
 export default function Profile() {
   const navigate = useNavigate();
   const activeLocale = useUserStore((state) => state.activeLocale);
+  const itemCount = useCartStore((state) => state.itemCount);
   const { t } = useI18n(activeLocale);
   const profileMarkup = useMemo(() => buildProfileMarkup(t), [t]);
 
@@ -287,7 +289,7 @@ export default function Profile() {
       <CopiedTopBar />
       <CopiedPageTitle activeTab="profile" />
       <div dangerouslySetInnerHTML={{ __html: profileMarkup }} />
-      <CopiedBottomNav activeTab="profile" />
+      <CopiedBottomNav activeTab="profile" cartCount={itemCount()} />
     </>
   );
 }

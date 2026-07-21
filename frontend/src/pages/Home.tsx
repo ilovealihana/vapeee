@@ -5,6 +5,7 @@ import CopiedPageTitle from '../components/CopiedPageTitle';
 import CopiedSmokeBackground from '../components/CopiedSmokeBackground';
 import CopiedTopBar from '../components/CopiedTopBar';
 import { useI18n } from '../i18n';
+import { useCartStore } from '../store/cart';
 import { useUserStore } from '../store/user';
 
 function buildHomeMarkup(t: (key: string) => string) {
@@ -132,6 +133,7 @@ function buildHomeMarkup(t: (key: string) => string) {
 export default function Home() {
   const navigate = useNavigate();
   const activeLocale = useUserStore((state) => state.activeLocale);
+  const itemCount = useCartStore((state) => state.itemCount);
   const { t } = useI18n(activeLocale);
   const homeMarkup = useMemo(() => buildHomeMarkup(t), [t]);
 
@@ -188,7 +190,7 @@ export default function Home() {
       <CopiedTopBar />
       <CopiedPageTitle activeTab="home" />
       <div dangerouslySetInnerHTML={{ __html: homeMarkup }} />
-      <CopiedBottomNav activeTab="home" />
+      <CopiedBottomNav activeTab="home" cartCount={itemCount()} />
     </>
   );
 }
