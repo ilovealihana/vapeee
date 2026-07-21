@@ -11,7 +11,9 @@ from db.models.product import Product
 from db.models.product_variant import ProductVariant
 from db.repositories.catalog import CatalogRepository
 from db.session import Base
-from webapp.routes.admin import admin_get_stock, admin_list_products
+from webapp.errors import ApiError, ErrorCode
+from webapp.routes.admin import admin_get_stock, admin_list_products, admin_update_stock
+from webapp.schemas import UpdateStockRequest
 
 
 class AdminInventoryContractTest(unittest.IsolatedAsyncioTestCase):
@@ -197,6 +199,55 @@ class AdminInventoryContractTest(unittest.IsolatedAsyncioTestCase):
             summary = await CatalogRepository(session).get_location_stock_summary(location.id)
 
         self.assertEqual(summary["total_qty"], 2)
+
+    async def test_admin_stock_update_rejects_soft_deleted_product_variant(self):
+        async with self.session_maker() as session:
+            city = City(name="Wroclaw", slug="wroclaw", is_active=True)
+            session.add(city)
+            await session.flush()
+
+            location = Location(
+                city_id=city.id,
+                name="Center",
+                address="Main 1",
+                is_active=True,
+            )
+            deleted_product = Product(
+                name_ru="ELFLIQ",
+                name_pl="ELFLIQ",
+                name_uk="ELFLIQ",
+                base_price=Decimal("11.00"),
+                is_active=False,
+            )
+            session.add_all([location, deleted_product])
+            await session.flush()
+
+            deleted_variant = ProductVariant(
+                product_id=deleted_product.id,
+                name_ru="Deleted variant",
+                name_pl="Deleted variant",
+                name_uk="Deleted variant",
+            )
+            session.add(deleted_variant)
+            await session.commit()
+
+            with self.assertRaises(ApiError) as raised:
+                await admin_update_stock(
+                    UpdateStockRequest(
+                        items=[
+                            {
+                                "location_id": location.id,
+                                "variant_id": deleted_variant.id,
+                                "quantity": 4,
+                            }
+                        ]
+                    ),
+                    _=object(),
+                    session=session,
+                )
+
+        self.assertEqual(raised.exception.status_code, 404)
+        self.assertEqual(raised.exception.code, ErrorCode.ADMIN_VARIANT_NOT_FOUND)
 
 
 if __name__ == "__main__":

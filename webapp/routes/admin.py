@@ -341,6 +341,29 @@ async def admin_update_stock(
     session: AsyncSession = Depends(get_session),
 ):
     for item in body.items:
+        location_result = await session.execute(
+            select(Location, City)
+            .join(City, City.id == Location.city_id)
+            .where(
+                Location.id == item.location_id,
+                Location.is_active == True,
+                City.is_active == True,
+            )
+        )
+        if location_result.one_or_none() is None:
+            raise api_error(404, ErrorCode.ADMIN_LOCATION_NOT_FOUND, "Location not found")
+
+        variant_result = await session.execute(
+            select(ProductVariant, Product)
+            .join(Product, Product.id == ProductVariant.product_id)
+            .where(
+                ProductVariant.id == item.variant_id,
+                Product.is_active == True,
+            )
+        )
+        if variant_result.one_or_none() is None:
+            raise api_error(404, ErrorCode.ADMIN_VARIANT_NOT_FOUND, "Variant not found")
+
         result = await session.execute(
             select(LocationStock).where(
                 LocationStock.location_id == item.location_id,

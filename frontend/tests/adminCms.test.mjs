@@ -113,3 +113,11 @@ test('admin css defines dense cms composition without user product-card reuse', 
   assert.match(css, /\.admin-confirm-dialog\s*\{/);
   assert.doesNotMatch(css, /\.admin-cms-table[\s\S]{0,500}product-card/);
 });
+
+test('admin stock inputs force readable dark colors in Telegram webview', () => {
+  assert.match(css, /button,\s*input,\s*textarea,\s*select\s*\{[\s\S]*color-scheme:\s*dark;/);
+  assert.match(css, /\.input,\s*\.select\s*\{[\s\S]*background-color:\s*var\(--surface\);/);
+  assert.match(css, /\.input,\s*\.select\s*\{[\s\S]*-webkit-text-fill-color:\s*var\(--primary\);/);
+  assert.match(css, /\.admin-qty-control \.input\s*\{[\s\S]*background-color:\s*#101011;/);
+  assert.match(css, /\.admin-qty-control \.input\s*\{[\s\S]*-webkit-text-fill-color:\s*var\(--primary\);/);
+});

@@ -679,6 +679,7 @@ body {
 
 button, input, textarea, select {
   font: inherit;
+  color-scheme: dark;
 }
 
 button {
@@ -838,11 +839,16 @@ button {
   width: 100%;
   min-height: 48px;
   background: var(--surface);
+  background-color: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   color: var(--primary);
+  -webkit-text-fill-color: var(--primary);
+  caret-color: var(--primary);
   padding: 0 14px;
   outline: none;
+  appearance: none;
+  -webkit-appearance: none;
 }
 
 textarea.input {
@@ -2147,6 +2153,9 @@ textarea.input {
 
 .admin-qty-control .input {
   min-height: 38px;
+  background-color: #101011;
+  color: var(--primary);
+  -webkit-text-fill-color: var(--primary);
   padding: 0;
   text-align: center;
 }
