@@ -52,9 +52,15 @@ test('admin city and product CRUD pages use i18n keys for visible labels', () =>
   assert.match(citiesSource, /t\('admin\.cities\.title'\)/);
   assert.match(citiesSource, /t\('admin\.cities\.deleteCityMessage'\)\.replace\('\{name\}', city\.name\)/);
   assert.match(citiesSource, /t\('admin\.fields\.telegramManager'\)/);
+  assert.match(citiesSource, /onClick=\{\(\) => openLocationModal\(city\.id\)\}/);
+  assert.match(citiesSource, /aria-label=\{t\('admin\.cities\.addLocation'\)\}/);
   assert.match(productsSource, /t\('admin\.products\.title'\)/);
   assert.match(productsSource, /t\('admin\.products\.deleteVariantMessage'\)\.replace\('\{variant\}', variant\.name_ru\)\.replace\('\{product\}', product\.name_ru\)/);
   assert.match(productsSource, /t\('admin\.fields\.variantPrice'\)/);
+  assert.match(productsSource, /function withNameFallback/);
+  assert.match(productsSource, /await adminApi\.createVariant\(product\.id/);
+  assert.match(productsSource, /onClick=\{\(\) => openVariantModal\(product\.id\)\}/);
+  assert.match(productsSource, /aria-label=\{t\('admin\.products\.addVariant'\)\}/);
   assert.match(productsSource, /PRODUCT_NAME_FIELD_LABEL_KEYS/);
   assert.match(productsSource, /t\(PRODUCT_NAME_FIELD_LABEL_KEYS\[field\]\)/);
   assert.doesNotMatch(productsSource, /field\.toUpperCase\(\)/);

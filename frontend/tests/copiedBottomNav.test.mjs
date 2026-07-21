@@ -64,9 +64,9 @@ async function compileTsFile(sourcePath, modulePath, replacements = []) {
 }
 
 test('copied bottom navigation maps tab indexes to app routes', () => {
-  assert.deepEqual(COPIED_BOTTOM_NAV_TARGETS, ['/', '/products', '/cart', '/profile']);
+  assert.deepEqual(COPIED_BOTTOM_NAV_TARGETS, ['/', '/cities', '/cart', '/profile']);
   assert.equal(getCopiedBottomNavTarget(0), '/');
-  assert.equal(getCopiedBottomNavTarget(1), '/products');
+  assert.equal(getCopiedBottomNavTarget(1), '/cities');
   assert.equal(getCopiedBottomNavTarget(2), '/cart');
   assert.equal(getCopiedBottomNavTarget(3), '/profile');
 });
@@ -89,7 +89,7 @@ test('copied shared bars expose the copied design configuration', () => {
     COPIED_BOTTOM_NAV_ITEMS.map(({ id, labelKey, path, icon }) => ({ id, labelKey, path, icon })),
     [
       { id: 'home', labelKey: 'nav.home', path: '/', icon: 'home' },
-      { id: 'catalog', labelKey: 'nav.catalog', path: '/products', icon: 'grid_view' },
+      { id: 'catalog', labelKey: 'nav.catalog', path: '/cities', icon: 'grid_view' },
       { id: 'cart', labelKey: 'nav.cart', path: '/cart', icon: 'shopping_cart' },
       { id: 'profile', labelKey: 'nav.profile', path: '/profile', icon: 'person' },
     ],

@@ -19,6 +19,16 @@ const PRODUCT_NAME_FIELD_LABEL_KEYS = {
   name_uk: 'admin.fields.nameUk',
 } as const;
 
+function withNameFallback<T extends { name_ru: string; name_pl: string; name_uk: string }>(data: T): T {
+  const name = data.name_ru.trim();
+  return {
+    ...data,
+    name_ru: name,
+    name_pl: data.name_pl.trim() || name,
+    name_uk: data.name_uk.trim() || name,
+  };
+}
+
 export default function AdminProducts() {
   const activeLocale = useUserStore((state) => state.activeLocale);
   const { t } = useI18n(activeLocale);
@@ -49,8 +59,16 @@ export default function AdminProducts() {
 
   const saveProd = async () => {
     try {
-      if (editProd) await adminApi.updateProduct(editProd.id, { ...prodForm, base_price: prodForm.base_price as any });
-      else await adminApi.createProduct(prodForm as any);
+      const data = withNameFallback({ ...prodForm, base_price: prodForm.base_price as any });
+      if (editProd) await adminApi.updateProduct(editProd.id, data);
+      else {
+        const product = await adminApi.createProduct(data);
+        await adminApi.createVariant(product.id, {
+          name_ru: data.name_ru,
+          name_pl: data.name_pl,
+          name_uk: data.name_uk,
+        });
+      }
       setShowProdModal(false);
       setProdForm(emptyProduct);
       setEditProd(null);
@@ -71,7 +89,7 @@ export default function AdminProducts() {
 
   const saveVar = async () => {
     try {
-      const data = { ...varForm, price_override: varForm.price_override || undefined };
+      const data = withNameFallback({ ...varForm, price_override: varForm.price_override || undefined });
       if (editVar) await adminApi.updateVariant(editVar.id, data as any);
       else await adminApi.createVariant(varProductId, data as any);
       setShowVarModal(false);
@@ -153,6 +171,9 @@ export default function AdminProducts() {
                 <span className="muted">{t('admin.products.variantsCount').replace('{count}', String(product.variants.length))}</span>
                 <AdminStatusBadge status={product.is_active ? 'active' : 'hidden'} label={product.is_active ? t('admin.status.active') : t('admin.status.hidden')} />
                 <div className="admin-row-actions">
+                  <button className="admin-icon-button" type="button" onClick={() => openVariantModal(product.id)} aria-label={t('admin.products.addVariant')}>
+                    <Icon name="plus" size={16} />
+                  </button>
                   <button className="admin-icon-button" type="button" onClick={() => openProductModal(product)} aria-label={t('admin.products.editProductAria')}>
                     <Icon name="edit" size={16} />
                   </button>

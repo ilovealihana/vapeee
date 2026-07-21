@@ -143,6 +143,11 @@ test('customer copied pages use i18n keys and real cart/catalog flows', async ()
   assert.match(sources[3], /useMemo\(\(\) => build\w+Markup\(t\), \[t\]\)/);
   assert.match(sources[0], /t\('home\.greeting'\)/);
   assert.match(sources[0], /t\('home\.popular'\)/);
+  assert.match(sources[0], /data-home-action="catalog"/);
+  assert.match(sources[0], /role="button" tabindex="0" data-home-action="catalog"/);
+  assert.match(sources[0], /addEventListener\('keydown', onHomeKeydown\)/);
+  assert.match(sources[0], /navigate\('\/cities'\)/);
+  assert.doesNotMatch(sources[0], /<button class="[^"]*active-scale[^"]*" type="button" data-home-action="catalog">/);
   assert.match(sources[1], /t\('catalog\.viewToggle'\)/);
   assert.match(sources[1], /useParams<\{ locationId: string \}>\(\)/);
   assert.match(sources[1], /const locationId = routeLocationId \|\| queryLocationId/);

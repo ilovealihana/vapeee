@@ -156,6 +156,9 @@ export default function AdminCities() {
                 <AdminStatusBadge status={city.is_active ? 'active' : 'hidden'} label={city.is_active ? t('admin.status.active') : t('admin.status.hidden')} />
                 <span className="muted">{t('admin.cities.locationsCount').replace('{count}', String(locations[city.id]?.length ?? '-'))}</span>
                 <div className="admin-row-actions">
+                  <button className="admin-icon-button" type="button" onClick={() => openLocationModal(city.id)} aria-label={t('admin.cities.addLocation')}>
+                    <Icon name="plus" size={16} />
+                  </button>
                   <button className="admin-icon-button" type="button" onClick={() => openCityModal(city)} aria-label={t('admin.cities.editCityAria')}>
                     <Icon name="edit" size={16} />
                   </button>
