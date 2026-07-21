@@ -930,13 +930,18 @@ input.input,
 textarea.input,
 select.input,
 .select {
+  background: var(--surface) !important;
   background-color: var(--surface) !important;
   background-image: none !important;
   color: var(--primary) !important;
   -webkit-text-fill-color: var(--primary) !important;
   caret-color: var(--primary) !important;
   border-color: var(--border) !important;
-  box-shadow: none !important;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  background-clip: padding-box !important;
+  -webkit-box-shadow: 0 0 0 1000px var(--surface) inset !important;
+  box-shadow: 0 0 0 1000px var(--surface) inset !important;
 }
 
 input.input:-webkit-autofill,
@@ -2257,10 +2262,13 @@ textarea.input {
 }
 
 .admin-qty-control input.input {
+  background: #101011 !important;
   background-color: #101011 !important;
   color: var(--primary) !important;
   -webkit-text-fill-color: var(--primary) !important;
   border-color: #2a2a2a !important;
+  -webkit-box-shadow: 0 0 0 1000px #101011 inset !important;
+  box-shadow: 0 0 0 1000px #101011 inset !important;
 }
 
 .admin-modal-overlay {

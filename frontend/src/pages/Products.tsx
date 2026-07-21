@@ -36,7 +36,7 @@ export default function Products() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [categoryId, setCategoryId] = useState<number | undefined>();
-  const [layout, setLayout] = useState<'two' | 'three'>('three');
+  const [layout, setLayout] = useState<'two' | 'three'>('two');
   const [loading, setLoading] = useState(true);
   const [busyProduct, setBusyProduct] = useState<number | null>(null);
   const [error, setError] = useState('');

@@ -3,7 +3,10 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 
 const root = new URL('../src/', import.meta.url);
+const projectRoot = new URL('../', import.meta.url);
 const css = readFileSync(new URL('index.css', root), 'utf8');
+const indexHtml = readFileSync(new URL('index.html', projectRoot), 'utf8');
+const mainSource = readFileSync(new URL('main.tsx', root), 'utf8');
 const layoutSource = readFileSync(new URL('pages/admin/AdminLayout.tsx', root), 'utf8');
 const citiesSource = readFileSync(new URL('pages/admin/AdminCities.tsx', root), 'utf8');
 const productsSource = readFileSync(new URL('pages/admin/AdminProducts.tsx', root), 'utf8');
@@ -119,20 +122,26 @@ test('admin stock inputs force readable dark colors in Telegram webview', () => 
   assert.match(css, /button,\s*input,\s*textarea,\s*select\s*\{[\s\S]*color-scheme:\s*dark;/);
   assert.match(css, /input\.input,\s*textarea\.input,\s*select\.input,\s*\.select\s*\{[\s\S]*background-color:\s*var\(--surface\)\s*!important;/);
   assert.match(css, /input\.input,\s*textarea\.input,\s*select\.input,\s*\.select\s*\{[\s\S]*-webkit-text-fill-color:\s*var\(--primary\)\s*!important;/);
+  assert.match(css, /input\.input,\s*textarea\.input,\s*select\.input,\s*\.select\s*\{[\s\S]*-webkit-box-shadow:\s*0 0 0 1000px var\(--surface\) inset\s*!important;/);
   assert.match(css, /\.admin-qty-control input\.input\s*\{[\s\S]*background-color:\s*#101011\s*!important;/);
   assert.match(css, /\.admin-qty-control input\.input\s*\{[\s\S]*-webkit-text-fill-color:\s*var\(--primary\)\s*!important;/);
+  assert.match(css, /\.admin-qty-control input\.input\s*\{[\s\S]*-webkit-box-shadow:\s*0 0 0 1000px #101011 inset\s*!important;/);
+  assert.doesNotMatch(indexHtml, /plugins=forms/);
+  assert.match(indexHtml, /plugins=container-queries/);
+  assert.match(mainSource, /installTelegramFormReset/);
+  assert.match(mainSource, /id = 'telegram-form-reset'/);
+  assert.match(mainSource, /-webkit-box-shadow:\s*0 0 0 1000px #151515 inset !important;/);
+  assert.match(mainSource, /\.admin-qty-control input\.input \{[\s\S]*-webkit-box-shadow:\s*0 0 0 1000px #101011 inset !important;/);
 });
 
-test('telegram webview forms avoid native light typed or input-mode fields', () => {
+test('telegram webview forms avoid native light typed fields', () => {
   for (const source of [productsSource, stockSource, checkoutSource]) {
     assert.doesNotMatch(source, /<input[^>]+type="(?:number|tel|email)"/);
-    assert.doesNotMatch(source, /<input[^>]+inputMode=/);
-    assert.doesNotMatch(source, /<input[^>]+pattern=/);
   }
 
-  assert.match(productsSource, /type="text" value=\{prodForm\.base_price\}/);
-  assert.match(productsSource, /type="text" value=\{varForm\.price_override\}/);
-  assert.match(stockSource, /type="text" value=\{qty\(row\)\}/);
-  assert.match(checkoutSource, /type="text" placeholder="\+48 500 123 456"/);
-  assert.match(checkoutSource, /type="text" \/>/);
+  assert.match(productsSource, /<input className="input" type="text" inputMode="decimal" value=\{prodForm\.base_price\}/);
+  assert.match(productsSource, /<input className="input" type="text" inputMode="decimal" value=\{varForm\.price_override\}/);
+  assert.match(stockSource, /<input className="input" type="text" inputMode="numeric" pattern="\[0-9\]\*" value=\{qty\(row\)\}/);
+  assert.match(checkoutSource, /<input className="input"[\s\S]*type="text" inputMode="tel"[\s\S]*placeholder="\+48 500 123 456"/);
+  assert.match(checkoutSource, /<input className="input"[\s\S]*type="text" inputMode="email"/);
 });

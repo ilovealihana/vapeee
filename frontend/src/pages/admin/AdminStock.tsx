@@ -91,7 +91,7 @@ export default function AdminStock() {
                 <button className="admin-icon-button" type="button" onClick={() => setEdited(prev => ({ ...prev, [key(row)]: Math.max(0, qty(row) - 1) }))} aria-label={t('admin.stock.decreaseAria')}>
                   <Icon name="minus" size={16} />
                 </button>
-                <input className="input" type="text" value={qty(row)} onChange={event => setEdited(prev => ({ ...prev, [key(row)]: Math.max(0, Number(event.target.value) || 0) }))} />
+                <input className="input" type="text" inputMode="numeric" pattern="[0-9]*" value={qty(row)} onChange={event => setEdited(prev => ({ ...prev, [key(row)]: Math.max(0, Number(event.target.value) || 0) }))} />
                 <button className="admin-icon-button" type="button" onClick={() => setEdited(prev => ({ ...prev, [key(row)]: qty(row) + 1 }))} aria-label={t('admin.stock.increaseAria')}>
                   <Icon name="plus" size={16} />
                 </button>

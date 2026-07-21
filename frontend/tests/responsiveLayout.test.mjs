@@ -87,7 +87,7 @@ test('catalog exposes a separate two and three column product grid selector', ()
 });
 
 test('catalog grid selector uses React state and keeps the three-column icon inside the active pill', () => {
-  assert.match(productsSource, /const \[layout, setLayout\] = useState<'two' \| 'three'>\('three'\)/);
+  assert.match(productsSource, /const \[layout, setLayout\] = useState<'two' \| 'three'>\('two'\)/);
   assert.match(productsSource, /aria-pressed=\{layout === 'three'\}/);
   assert.doesNotMatch(productsSource, /addEventListener\('click',\s*onCatalogClick\)/);
   assert.match(css, /\.catalog-view-icon-three span\s*\{[^}]*width:\s*5px;[^}]*height:\s*5px;/s);

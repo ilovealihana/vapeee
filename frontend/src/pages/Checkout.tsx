@@ -150,8 +150,8 @@ export default function Checkout() {
         {step === 1 && (
           <div style={{ marginTop: 18 }}>
             <div className="input-group"><label className="input-label">{t('checkout.fields.name')}</label><input className="input" value={form.customer_name} onChange={e => set('customer_name', e.target.value)} /></div>
-            <div className="input-group"><label className="input-label">{t('checkout.fields.phone')}</label><input className="input" value={form.customer_phone} onChange={e => set('customer_phone', e.target.value)} type="text" placeholder="+48 500 123 456" /></div>
-            <div className="input-group"><label className="input-label">{t('checkout.fields.email')}</label><input className="input" value={form.customer_email} onChange={e => set('customer_email', e.target.value)} type="text" /></div>
+            <div className="input-group"><label className="input-label">{t('checkout.fields.phone')}</label><input className="input" value={form.customer_phone} onChange={e => set('customer_phone', e.target.value)} type="text" inputMode="tel" placeholder="+48 500 123 456" /></div>
+            <div className="input-group"><label className="input-label">{t('checkout.fields.email')}</label><input className="input" value={form.customer_email} onChange={e => set('customer_email', e.target.value)} type="text" inputMode="email" /></div>
             {form.delivery_type === 'door_delivery' && (
               <div className="input-group"><label className="input-label">{t('checkout.fields.deliveryAddress')}</label><input className="input" value={form.delivery_address} onChange={e => set('delivery_address', e.target.value)} placeholder={t('checkout.placeholders.deliveryAddress')} /></div>
             )}
