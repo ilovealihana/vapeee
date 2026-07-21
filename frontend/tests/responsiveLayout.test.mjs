@@ -80,6 +80,15 @@ test('catalog root does not show a back arrow before a city is selected', () => 
   assert.match(locationsSource, /navigate\('\/cities'\)/);
 });
 
+test('selected location catalog has a back arrow to location selection', () => {
+  assert.match(locationsSource, /navigate\(`\/locations\/\$\{selected\.id\}\/products`, \{ state: \{ cityId \} \}\)/);
+  assert.match(productsSource, /useLocation/);
+  assert.match(productsSource, /const backTarget = returnCityId \? `\/cities\/\$\{returnCityId\}\/locations` : '\/cities';/);
+  assert.match(productsSource, /className="back-btn"/);
+  assert.match(productsSource, /onClick=\{\(\) => navigate\(backTarget\)\}/);
+  assert.match(productsSource, /<Icon name="chevronLeft" \/>/);
+});
+
 test('app scrolls to the top on route changes', () => {
   assert.match(appSource, /<ScrollToTop \/>/);
   assert.match(appSource, /function ScrollToTop\(\)/);

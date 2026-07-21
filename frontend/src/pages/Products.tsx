@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api, type Category, type Product } from '../api/client';
 import { formatApiError } from '../api/errors';
 import CopiedBottomNav from '../components/CopiedBottomNav';
 import CopiedPageTitle from '../components/CopiedPageTitle';
 import CopiedSmokeBackground from '../components/CopiedSmokeBackground';
 import CopiedTopBar from '../components/CopiedTopBar';
+import Icon from '../components/Icon';
 import ProductMedia from '../components/ProductMedia';
 import { useI18n } from '../i18n';
 import { useCartStore } from '../store/cart';
@@ -25,11 +26,14 @@ function parseLocationId(value: string | undefined): number | undefined {
 
 export default function Products() {
   const navigate = useNavigate();
+  const { state } = useLocation();
   const { locationId: routeLocationId } = useParams<{ locationId: string }>();
   const [searchParams] = useSearchParams();
   const queryLocationId = searchParams.get('location_id') || undefined;
   const locationId = routeLocationId || queryLocationId;
   const numericLocationId = parseLocationId(locationId);
+  const returnCityId = (state as { cityId?: string } | null)?.cityId;
+  const backTarget = returnCityId ? `/cities/${returnCityId}/locations` : '/cities';
   const activeLocale = useUserStore((state) => state.activeLocale);
   const { t } = useI18n(activeLocale);
   const { addItem, fetchCart, itemCount } = useCartStore();
@@ -85,6 +89,7 @@ export default function Products() {
       <div className="copied-catalog-shell dark overflow-x-hidden" data-catalog-layout={layout}>
         <div className="relative z-10 flex flex-col min-h-screen w-full">
           <div className="catalog-filter-bar px-margin-page py-3 relative z-10">
+            <button className="back-btn" onClick={() => navigate(backTarget)} aria-label={t('common.back')}><Icon name="chevronLeft" /></button>
             <div className={`catalog-view-toggle ${layout === 'two' ? 'is-two' : 'is-three'}`} role="group" aria-label={t('catalog.viewToggle')}>
               <button
                 className={`catalog-view-option ${layout === 'two' ? 'is-active' : ''}`}

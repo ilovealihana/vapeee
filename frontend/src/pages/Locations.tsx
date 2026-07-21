@@ -74,7 +74,7 @@ export default function Locations() {
               <div><span className="muted">{t('locations.stock')}</span><br /><strong>{selected.stock_summary?.total_qty ?? 0} {t('common.piecesShort')}</strong></div>
               <div><span className="muted">{t('locations.activity')}</span><br /><strong>{formatLastSold(selected.stock_summary?.last_sold, t)}</strong></div>
             </div>
-            <button className="btn btn-primary" onClick={() => navigate(`/locations/${selected.id}/products`)}>
+            <button className="btn btn-primary" onClick={() => navigate(`/locations/${selected.id}/products`, { state: { cityId } })}>
               {t('locations.openCatalog')}
             </button>
             {selected.curator_tg_username && (
