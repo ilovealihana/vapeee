@@ -47,12 +47,19 @@ class UserRepository:
         return user
 
     async def update_contact(
-        self, tg_id: int, phone: str | None = None, email: str | None = None
-    ) -> None:
+        self,
+        tg_id: int,
+        phone: str | None = None,
+        email: str | None = None,
+        update_phone: bool = False,
+        update_email: bool = False,
+    ) -> User | None:
         user = await self.get_by_tg_id(tg_id)
         if user:
-            if phone is not None:
+            if update_phone:
                 user.phone = phone
-            if email is not None:
+            if update_email:
                 user.email = email
             await self.session.commit()
+            await self.session.refresh(user)
+        return user

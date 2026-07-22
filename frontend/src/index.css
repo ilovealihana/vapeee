@@ -482,6 +482,67 @@ body {
   overflow: visible;
 }
 
+.copied-profile-shell .profile-contact-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.copied-profile-shell .profile-contact-display,
+.copied-profile-shell .profile-contact-editor {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+
+.copied-profile-shell .profile-contact-display span {
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.copied-profile-shell .profile-contact-input {
+  width: min(190px, 48vw);
+  min-height: 34px;
+  border: 1px solid rgba(141, 210, 215, 0.34);
+  border-radius: 10px;
+  background: rgba(13, 15, 16, 0.92);
+  color: #e2e2e3;
+  padding: 6px 9px;
+  outline: none;
+}
+
+.copied-profile-shell .profile-contact-input:focus {
+  border-color: #8dd2d7;
+}
+
+.copied-profile-shell .profile-contact-icon {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  color: #8dd2d7;
+  background: rgba(141, 210, 215, 0.1);
+}
+
+.copied-profile-shell .profile-contact-icon:disabled {
+  opacity: 0.55;
+}
+
+.copied-profile-shell .profile-contact-icon .material-symbols-outlined {
+  font-size: 18px;
+}
+
+.copied-profile-shell .profile-contact-error {
+  margin-top: 8px;
+  color: #ffb4ab;
+  font-size: 13px;
+}
+
 .copied-profile-shell .profile-panel[hidden] {
   display: none !important;
 }

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -82,6 +82,12 @@ class OrderRepository:
             .options(selectinload(Order.items))
         )
         return list(result.scalars().all())
+
+    async def get_first_order_at(self, user_id: int) -> datetime | None:
+        result = await self.session.execute(
+            select(func.min(Order.created_at)).where(Order.user_id == user_id)
+        )
+        return result.scalar_one_or_none()
 
     async def get_new_orders(self, page: int = 0, page_size: int = 10) -> list[Order]:
         result = await self.session.execute(

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { formatApiError } from '../api/errors';
 import { api, type CreateOrderRequest } from '../api/client';
@@ -33,22 +33,47 @@ function buildCalendar(year: number, month: number) {
 export default function Checkout() {
   const navigate = useNavigate();
   const { cart, fetchCart } = useCartStore();
+  const user = useUserStore((state) => state.user);
+  const fetchUser = useUserStore((state) => state.fetchUser);
   const activeLocale = useUserStore((state) => state.activeLocale);
   const { t } = useI18n(activeLocale);
   const [step, setStep] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const contactDefaultsApplied = useRef(false);
+  const contactTouchedRef = useRef({ customer_phone: false, customer_email: false });
   const [form, setForm] = useState({
     delivery_type: 'pickup' as 'pickup' | 'door_delivery',
     customer_name: '',
-    customer_phone: '',
-    customer_email: '',
+    customer_phone: user?.phone ?? '',
+    customer_email: user?.email ?? '',
     delivery_address: '',
     comment: '',
     payment_method: '',
     scheduled_date: '',
     scheduled_time: '',
   });
+
+  useEffect(() => {
+    if (!user) {
+      void fetchUser();
+    }
+  }, [fetchUser, user]);
+
+  useEffect(() => {
+    if (contactDefaultsApplied.current) return;
+    if (!user) return;
+    contactDefaultsApplied.current = true;
+    setForm((current) => ({
+      ...current,
+      customer_phone: contactTouchedRef.current.customer_phone
+        ? current.customer_phone
+        : current.customer_phone || user?.phone || '',
+      customer_email: contactTouchedRef.current.customer_email
+        ? current.customer_email
+        : current.customer_email || user?.email || '',
+    }));
+  }, [user?.email, user?.phone]);
 
   const today = new Date();
   const [calYear, setCalYear] = useState(today.getFullYear());
@@ -76,7 +101,12 @@ export default function Checkout() {
     t('checkout.weekdays.sat'),
     t('checkout.weekdays.sun'),
   ];
-  const set = (k: keyof typeof form, v: string) => setForm((f) => ({ ...f, [k]: v }));
+  const set = (k: keyof typeof form, v: string) => {
+    if (k === 'customer_phone' || k === 'customer_email') {
+      contactTouchedRef.current[k] = true;
+    }
+    setForm((f) => ({ ...f, [k]: v }));
+  };
 
   const canNext = () => {
     if (step === 0) return !!form.delivery_type;

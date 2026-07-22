@@ -188,7 +188,6 @@ const ru = {
     title: 'Профиль',
     orders: 'Заказы',
     language: 'Язык',
-    contacts: 'Контакты',
     tabsAria: 'Разделы профиля',
     tabs: {
       profile: 'Профиль',
@@ -202,6 +201,7 @@ const ru = {
       email: 'Email',
       language: 'Язык',
       betaSince: 'В бете с',
+      firstPurchase: 'Первая покупка',
     },
     languages: {
       ru: 'Русский',
@@ -212,6 +212,12 @@ const ru = {
     adminPanel: {
       title: 'Панель управления',
       description: 'Администрирование магазина',
+    },
+    contacts: {
+      input: 'Контакт',
+      edit: 'Редактировать',
+      save: 'Сохранить',
+      cancel: 'Отмена',
     },
     actions: {
       support: 'Поддержка',

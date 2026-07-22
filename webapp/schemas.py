@@ -22,6 +22,55 @@ class UserSchema(BaseModel):
     phone: Optional[str]
     email: Optional[str]
     created_at: datetime
+    first_order_at: Optional[datetime] = None
+
+
+class UpdateContactRequest(BaseModel):
+    phone: Optional[str] = None
+    email: Optional[str] = None
+
+    @field_validator("phone", "email", mode="before")
+    @classmethod
+    def normalize_empty_contact(cls, value):
+        if value is None:
+            return None
+        if isinstance(value, str):
+            stripped = value.strip()
+            return stripped or None
+        return value
+
+    @field_validator("phone")
+    @classmethod
+    def validate_phone(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        if len(value) > 32:
+            raise ValueError("phone must be 32 characters or fewer")
+        if not all(char.isdigit() or char in "+-() " for char in value):
+            raise ValueError("phone has invalid characters")
+        if not any(char.isdigit() for char in value):
+            raise ValueError("phone must include at least one digit")
+        return value
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        if len(value) > 256:
+            raise ValueError("email must be 256 characters or fewer")
+        if value.count("@") != 1:
+            raise ValueError("email is invalid")
+        local, domain = value.split("@")
+        domain_parts = domain.split(".")
+        if (
+            not local
+            or any(char.isspace() for char in value)
+            or len(domain_parts) < 2
+            or any(not part for part in domain_parts)
+        ):
+            raise ValueError("email is invalid")
+        return value
 
 
 # ── Catalog ───────────────────────────────────────────────

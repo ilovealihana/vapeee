@@ -117,6 +117,13 @@ test('customer React pages use i18n for visible UI labels', async () => {
   assert.match(sources[2], /t\('productDetail\.addToCart'\)/);
   assert.match(sources[3], /t\('orderSuccess\.description'\)/);
   assert.match(sources[4], /formatApiError\(e, t\)/);
+  assert.match(sources[4], /const user = useUserStore\(\(state\) => state\.user\)/);
+  assert.match(sources[4], /const contactDefaultsApplied = useRef\(false\)/);
+  assert.match(sources[4], /const contactTouchedRef = useRef\(\{ customer_phone: false, customer_email: false \}\)/);
+  assert.match(sources[4], /if \(contactDefaultsApplied\.current\) return;/);
+  assert.match(sources[4], /contactTouchedRef\.current\[k\] = true;/);
+  assert.match(sources[4], /customer_phone: user\?\.phone \?\? ''/);
+  assert.match(sources[4], /customer_email: user\?\.email \?\? ''/);
   assert.match(sources[4], /'checkout\.steps\.delivery'/);
   assert.match(sources[4], /t\(STEPS\[step\]\)/);
   assert.match(sources[4], /t\('checkout\.fields\.email'\)/);
@@ -141,7 +148,7 @@ test('customer copied pages use i18n keys and real cart/catalog flows', async ()
 
   assert.match(sources[0], /useMemo\(\(\) => build\w+Markup\(t\), \[t\]\)/);
   assert.match(sources[3], /buildProfileMarkup\(\{[\s\S]*t,[\s\S]*user,[\s\S]*orders,[\s\S]*hasAdminAccess,[\s\S]*activeLocale/);
-  assert.match(sources[3], /\[t, user, orders, hasAdminAccess, activeLocale, activeProfileTab\]/);
+  assert.match(sources[3], /activeProfileTab,[\s\S]*editingContactField,[\s\S]*contactSavingField,[\s\S]*contactError/);
   assert.match(sources[0], /t\('home\.greeting'\)/);
   assert.match(sources[0], /t\('home\.popular'\)/);
   assert.match(sources[0], /data-home-action="catalog"/);
@@ -161,6 +168,8 @@ test('customer copied pages use i18n keys and real cart/catalog flows', async ()
   assert.match(sources[2], /await removeItem\(itemId\)/);
   assert.match(sources[2], /navigate\('\/checkout'\)/);
   assert.match(sources[3], /t\('profile\.tabs\.profile'\)/);
+  assert.match(sources[3], /t\('profile\.fields\.firstPurchase'\)/);
+  assert.match(sources[3], /t\('profile\.contacts\.save'\)/);
   assert.match(sources[3], /t\('profile\.languagePanel\.soon'\)/);
   assert.doesNotMatch(sources[0], />Привет, paranoia!<\/h2>/);
   assert.doesNotMatch(sources[1], />Все<\/button>/);

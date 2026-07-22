@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { adminApi } from '../api/admin';
 import { api, type Order, type User } from '../api/client';
+import { formatApiError } from '../api/errors';
 import CopiedBottomNav from '../components/CopiedBottomNav';
 import CopiedPageTitle from '../components/CopiedPageTitle';
 import CopiedSmokeBackground from '../components/CopiedSmokeBackground';
@@ -31,6 +32,7 @@ type OrderItem = {
 };
 
 type ProfileTab = 'profile' | 'orders' | 'language';
+type ContactField = 'phone' | 'email';
 
 function escapeHtml(value: unknown): string {
   return String(value ?? '')
@@ -49,6 +51,53 @@ function dash(value?: string | number | null): string {
   return `<span class="text-on-surface font-body-md text-body-md">${escapeHtml(value)}</span>`;
 }
 
+function editableContactRow({
+  field,
+  label,
+  value,
+  inputMode,
+  isEditing,
+  isSaving,
+  t,
+}: {
+  field: ContactField;
+  label: string;
+  value?: string | null;
+  inputMode: 'tel' | 'email';
+  isEditing: boolean;
+  isSaving: boolean;
+  t: Translate;
+}): string {
+  const displayValue = value ? escapeHtml(value) : '—';
+
+  if (isEditing) {
+    return String.raw`
+          <div class="profile-contact-row p-4" data-profile-contact-row="${field}">
+            <span class="text-on-surface-variant font-label-lg text-label-lg">${label}</span>
+            <div class="profile-contact-editor">
+              <input class="profile-contact-input" type="text" inputmode="${inputMode}" value="${escapeHtml(value ?? '')}" data-profile-contact-input="${field}" aria-label="${t('profile.contacts.input')}" />
+              <button class="profile-contact-icon" type="button" data-profile-contact-save="${field}" aria-label="${t('profile.contacts.save')}" ${isSaving ? 'disabled' : ''}>
+                <span class="material-symbols-outlined">${isSaving ? 'hourglass_empty' : 'check'}</span>
+              </button>
+              <button class="profile-contact-icon" type="button" data-profile-contact-cancel="${field}" aria-label="${t('profile.contacts.cancel')}" ${isSaving ? 'disabled' : ''}>
+                <span class="material-symbols-outlined">close</span>
+              </button>
+            </div>
+          </div>`;
+  }
+
+  return String.raw`
+          <div class="profile-contact-row p-4" data-profile-contact-row="${field}">
+            <span class="text-on-surface-variant font-label-lg text-label-lg">${label}</span>
+            <div class="profile-contact-display">
+              <span class="text-on-surface font-body-md text-body-md ${value ? '' : 'text-opacity-40'}">${displayValue}</span>
+              <button class="profile-contact-icon" type="button" data-profile-contact-edit="${field}" aria-label="${t('profile.contacts.edit')}">
+                <span class="material-symbols-outlined">edit</span>
+              </button>
+            </div>
+          </div>`;
+}
+
 function displayName(user: User | null, t: Translate): string {
   const fullName = [user?.first_name, user?.last_name].filter(Boolean).join(' ').trim();
   return fullName || user?.username || t('profile.title');
@@ -59,7 +108,7 @@ function initial(user: User | null, t: Translate): string {
   return source ? source.charAt(0).toUpperCase() : '?';
 }
 
-function formatProfileDate(dateStr?: string, locale = 'ru-RU'): string {
+function formatProfileDate(dateStr?: string | null, locale = 'ru-RU'): string {
   if (!dateStr) return '—';
 
   const date = new Date(dateStr);
@@ -207,6 +256,9 @@ function buildProfileMarkup({
   hasAdminAccess,
   activeLocale,
   activeTab,
+  editingContactField,
+  contactSavingField,
+  contactError,
 }: {
   t: Translate;
   user: User | null;
@@ -214,6 +266,9 @@ function buildProfileMarkup({
   hasAdminAccess: boolean;
   activeLocale: ActiveLocale;
   activeTab: ProfileTab;
+  editingContactField: ContactField | null;
+  contactSavingField: ContactField | null;
+  contactError: string;
 }) {
   const name = displayName(user, t);
   const username = user?.username ? `@${user.username}` : '—';
@@ -282,23 +337,34 @@ function buildProfileMarkup({
             <span class="text-on-surface-variant font-label-lg text-label-lg">${t('profile.fields.telegramId')}</span>
             ${dash(user?.tg_id)}
           </div>
-          <div class="flex justify-between items-center p-4">
-            <span class="text-on-surface-variant font-label-lg text-label-lg">${t('profile.fields.phone')}</span>
-            ${dash(user?.phone)}
-          </div>
-          <div class="flex justify-between items-center p-4">
-            <span class="text-on-surface-variant font-label-lg text-label-lg">${t('profile.fields.email')}</span>
-            ${dash(user?.email)}
-          </div>
+${editableContactRow({
+  field: 'phone',
+  label: t('profile.fields.phone'),
+  value: user?.phone,
+  inputMode: 'tel',
+  isEditing: editingContactField === 'phone',
+  isSaving: contactSavingField === 'phone',
+  t,
+})}
+${editableContactRow({
+  field: 'email',
+  label: t('profile.fields.email'),
+  value: user?.email,
+  inputMode: 'email',
+  isEditing: editingContactField === 'email',
+  isSaving: contactSavingField === 'email',
+  t,
+})}
           <div class="flex justify-between items-center p-4">
             <span class="text-on-surface-variant font-label-lg text-label-lg">${t('profile.fields.language')}</span>
             <span class="text-on-surface font-body-md text-body-md" data-profile-language-current>${profileLanguage}</span>
           </div>
           <div class="flex justify-between items-center p-4">
-            <span class="text-on-surface-variant font-label-lg text-label-lg">${t('profile.fields.betaSince')}</span>
-            <span class="text-on-surface font-body-md text-body-md">${escapeHtml(formatProfileDate(user?.created_at, locale))}</span>
+            <span class="text-on-surface-variant font-label-lg text-label-lg">${t('profile.fields.firstPurchase')}</span>
+            <span class="text-on-surface font-body-md text-body-md">${escapeHtml(formatProfileDate(user?.first_order_at, locale))}</span>
           </div>
         </div>
+        ${contactError ? `<p class="profile-contact-error">${escapeHtml(contactError)}</p>` : ''}
 
 ${adminPanel}
 
@@ -386,11 +452,15 @@ export default function Profile() {
   const navigate = useNavigate();
   const user = useUserStore((state) => state.user);
   const fetchUser = useUserStore((state) => state.fetchUser);
+  const updateContact = useUserStore((state) => state.updateContact);
   const activeLocale = useUserStore((state) => state.activeLocale);
   const itemCount = useCartStore((state) => state.itemCount);
   const [orders, setOrders] = useState<Order[]>([]);
   const [hasAdminAccess, setHasAdminAccess] = useState(false);
   const [activeProfileTab, setActiveProfileTab] = useState<ProfileTab>('profile');
+  const [editingContactField, setEditingContactField] = useState<ContactField | null>(null);
+  const [contactSavingField, setContactSavingField] = useState<ContactField | null>(null);
+  const [contactError, setContactError] = useState('');
   const { t } = useI18n(activeLocale);
 
   useEffect(() => {
@@ -423,8 +493,28 @@ export default function Profile() {
   }, []);
 
   const profileMarkup = useMemo(
-    () => buildProfileMarkup({ t, user, orders, hasAdminAccess, activeLocale, activeTab: activeProfileTab }),
-    [t, user, orders, hasAdminAccess, activeLocale, activeProfileTab],
+    () => buildProfileMarkup({
+      t,
+      user,
+      orders,
+      hasAdminAccess,
+      activeLocale,
+      activeTab: activeProfileTab,
+      editingContactField,
+      contactSavingField,
+      contactError,
+    }),
+    [
+      t,
+      user,
+      orders,
+      hasAdminAccess,
+      activeLocale,
+      activeProfileTab,
+      editingContactField,
+      contactSavingField,
+      contactError,
+    ],
   );
 
   useEffect(() => {
@@ -434,6 +524,9 @@ export default function Profile() {
     const languageButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('.copied-profile-shell [data-profile-language]'));
     const currentLanguage = document.querySelector<HTMLElement>('.copied-profile-shell [data-profile-language-current]');
     const adminButton = document.querySelector<HTMLButtonElement>('.copied-profile-shell [data-profile-action="admin"]');
+    const contactEditButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('.copied-profile-shell [data-profile-contact-edit]'));
+    const contactCancelButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('.copied-profile-shell [data-profile-contact-cancel]'));
+    const contactSaveButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('.copied-profile-shell [data-profile-contact-save]'));
 
     const handlers = interactiveElements.map((element) => {
       const onMouseDown = () => element.classList.add('scale-95');
@@ -480,13 +573,56 @@ export default function Profile() {
     const onAdminClick = () => navigate('/admin');
     adminButton?.addEventListener('click', onAdminClick);
 
+    const contactEditHandlers = contactEditButtons.map((button) => {
+      const onClick = () => {
+        setContactError('');
+        setEditingContactField(button.dataset.profileContactEdit as ContactField);
+      };
+      button.addEventListener('click', onClick);
+      return () => button.removeEventListener('click', onClick);
+    });
+
+    const contactCancelHandlers = contactCancelButtons.map((button) => {
+      const onClick = () => {
+        if (contactSavingField) return;
+        setContactError('');
+        setEditingContactField(null);
+      };
+      button.addEventListener('click', onClick);
+      return () => button.removeEventListener('click', onClick);
+    });
+
+    const contactSaveHandlers = contactSaveButtons.map((button) => {
+      const onClick = async () => {
+        const field = button.dataset.profileContactSave as ContactField;
+        const input = document.querySelector<HTMLInputElement>(`.copied-profile-shell [data-profile-contact-input="${field}"]`);
+        const value = input?.value.trim() || null;
+
+        setContactSavingField(field);
+        setContactError('');
+        try {
+          await updateContact({ [field]: value });
+          setEditingContactField(null);
+        } catch (e: any) {
+          setContactError(formatApiError(e, t));
+        } finally {
+          setContactSavingField(null);
+        }
+      };
+      button.addEventListener('click', onClick);
+      return () => button.removeEventListener('click', onClick);
+    });
+
     return () => {
       handlers.forEach((cleanup) => cleanup());
       tabHandlers.forEach((cleanup) => cleanup());
       languageHandlers.forEach((cleanup) => cleanup());
+      contactEditHandlers.forEach((cleanup) => cleanup());
+      contactCancelHandlers.forEach((cleanup) => cleanup());
+      contactSaveHandlers.forEach((cleanup) => cleanup());
       adminButton?.removeEventListener('click', onAdminClick);
     };
-  }, [navigate, profileMarkup]);
+  }, [contactSavingField, navigate, profileMarkup, t, updateContact, user?.email, user?.phone]);
 
   return (
     <>

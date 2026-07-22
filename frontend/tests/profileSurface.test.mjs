@@ -69,10 +69,15 @@ test('profile renders real user, access and order data instead of hardcoded demo
   assert.match(profileSource, /const \[orders, setOrders\] = useState<Order\[\]>\(\[\]\)/);
   assert.match(profileSource, /api\.orders\.list\(\)/);
   assert.match(profileSource, /adminApi\.getAccess\(\)/);
+  assert.match(profileSource, /updateContact\(\{ \[field\]: value \}\)/);
+  assert.match(profileSource, /data-profile-contact-edit="\$\{field\}"/);
+  assert.match(profileSource, /data-profile-contact-save="\$\{field\}"/);
+  assert.match(profileSource, /field: 'phone'/);
+  assert.match(profileSource, /field: 'email'/);
   assert.match(profileSource, /buildProfileMarkup\(\{[\s\S]*user,[\s\S]*orders,[\s\S]*hasAdminAccess/);
   assert.match(profileSource, /data-profile-action="admin"/);
   assert.match(profileSource, /orders\.map/);
-  assert.match(profileSource, /formatProfileDate\(user\?\.created_at/);
+  assert.match(profileSource, /formatProfileDate\(user\?\.first_order_at/);
   assert.match(profileSource, /const \[activeProfileTab, setActiveProfileTab\] = useState<ProfileTab>\('profile'\)/);
   assert.match(profileSource, /activeTab: activeProfileTab/);
   assert.match(profileSource, /setActiveProfileTab\(nextTab\)/);

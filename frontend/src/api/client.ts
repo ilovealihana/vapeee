@@ -43,9 +43,10 @@ export interface User {
   first_name: string;
   last_name?: string;
   language_code: string;
-  phone?: string;
-  email?: string;
+  phone: string | null;
+  email: string | null;
   created_at: string;
+  first_order_at: string | null;
 }
 
 export interface Category {
@@ -167,6 +168,11 @@ export const api = {
       request<User>('/api/user/language', {
         method: 'PATCH',
         body: JSON.stringify({ language_code }),
+      }),
+    updateContact: (data: { phone?: string | null; email?: string | null }) =>
+      request<User>('/api/user/contact', {
+        method: 'PATCH',
+        body: JSON.stringify(data),
       }),
   },
 

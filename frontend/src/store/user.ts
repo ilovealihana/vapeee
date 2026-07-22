@@ -17,6 +17,7 @@ interface UserStore {
   activeLocale: ActiveLocale;
   fetchUser: () => Promise<void>;
   setLanguage: (lang: string) => Promise<void>;
+  updateContact: (data: { phone?: string | null; email?: string | null }) => Promise<void>;
 }
 
 const initialLanguage = resolvePreferredLanguage();
@@ -57,6 +58,20 @@ export const useUserStore = create<UserStore>((set) => ({
     } catch (e: any) {
       set({ error: e.message || 'Failed to set language' });
       console.error('Failed to set language', e);
+    }
+  },
+
+  updateContact: async (data) => {
+    set({ loading: true, error: null });
+    try {
+      const user = await api.auth.updateContact(data);
+      const language = resolvePreferredLanguage(user.language_code);
+      const activeLocale = resolveActiveLocale(language);
+
+      set({ user, language, activeLocale, loading: false, error: null });
+    } catch (e: any) {
+      set({ error: e.message || 'Failed to update contact', loading: false });
+      throw e;
     }
   },
 }));
