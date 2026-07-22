@@ -518,6 +518,12 @@ body {
   border-color: #8dd2d7;
 }
 
+.copied-profile-shell .profile-contact-input::placeholder {
+  color: rgba(226, 226, 227, 0.42);
+  -webkit-text-fill-color: rgba(226, 226, 227, 0.42);
+  opacity: 1;
+}
+
 .copied-profile-shell .profile-contact-icon {
   width: 32px;
   height: 32px;
@@ -1051,7 +1057,9 @@ textarea.input {
 }
 
 .input::placeholder {
-  color: var(--muted);
+  color: rgba(119, 119, 123, 0.42);
+  -webkit-text-fill-color: rgba(119, 119, 123, 0.42);
+  opacity: 1;
 }
 
 .input-label {

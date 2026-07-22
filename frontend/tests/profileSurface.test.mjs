@@ -91,6 +91,11 @@ test('profile renders real user, access and order data instead of hardcoded demo
   assert.doesNotMatch(profileSource, /ELFLIQ Pink Lemonade/);
 });
 
+test('profile contact input placeholders stay visually distinct from typed text', () => {
+  assert.match(css, /\.copied-profile-shell \.profile-contact-input::placeholder\s*\{[\s\S]*rgba\(226,\s*226,\s*227,\s*0\.42\)/);
+  assert.match(css, /\.copied-profile-shell \.profile-contact-input::placeholder\s*\{[\s\S]*-webkit-text-fill-color:\s*rgba\(226,\s*226,\s*227,\s*0\.42\);/);
+});
+
 test('active profile tabs use the same highlighted color for every tab', () => {
   assert.match(css, /\.copied-profile-shell \[data-profile-tab\]\.active-tab-indicator\s*\{[^}]*color:\s*#8dd2d7 !important;/s);
   assert.match(css, /\.copied-profile-shell \[data-profile-tab\]\.active-tab-indicator \.material-symbols-outlined\s*\{[^}]*color:\s*#8dd2d7 !important;/s);

@@ -208,6 +208,9 @@ test('admin stock inputs force readable dark colors in Telegram webview', () => 
   assert.match(mainSource, /installTelegramFormReset/);
   assert.match(mainSource, /id = 'telegram-form-reset'/);
   assert.match(mainSource, /-webkit-box-shadow:\s*0 0 0 1000px #151515 inset !important;/);
+  assert.match(css, /\.input::placeholder\s*\{[\s\S]*rgba\(119,\s*119,\s*123,\s*0\.42\)/);
+  assert.match(css, /\.input::placeholder\s*\{[\s\S]*-webkit-text-fill-color:\s*rgba\(119,\s*119,\s*123,\s*0\.42\);/);
+  assert.match(mainSource, /input\.input::placeholder,\s*textarea\.input::placeholder\s*\{[\s\S]*rgba\(119,\s*119,\s*123,\s*0\.42\)\s*!important;/);
   assert.match(mainSource, /\.admin-qty-control input\.input \{[\s\S]*-webkit-box-shadow:\s*0 0 0 1000px #101011 inset !important;/);
 });
 

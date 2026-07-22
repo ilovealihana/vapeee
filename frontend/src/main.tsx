@@ -26,6 +26,13 @@ function installTelegramFormReset() {
       box-shadow: 0 0 0 1000px #151515 inset !important;
     }
 
+    input.input::placeholder,
+    textarea.input::placeholder {
+      color: rgba(119, 119, 123, 0.42) !important;
+      -webkit-text-fill-color: rgba(119, 119, 123, 0.42) !important;
+      opacity: 1 !important;
+    }
+
     .admin-qty-control input.input {
       background: #101011 !important;
       background-color: #101011 !important;
