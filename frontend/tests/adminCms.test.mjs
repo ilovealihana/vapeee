@@ -114,10 +114,15 @@ test('admin staff page is routed and uses cms/i18n patterns', () => {
   assert.match(staffSource, /adminApi\.createStaff/);
   assert.match(staffSource, /adminApi\.updateStaff/);
   assert.match(staffSource, /adminApi\.deleteStaff/);
+  assert.match(staffSource, /adminApi\.hardDeleteStaff/);
   assert.match(staffSource, /adminApi\.getCities/);
   assert.match(staffSource, /adminApi\.getLocations/);
   assert.match(staffSource, /role === 'city_curator'/);
   assert.match(staffSource, /role === 'point_manager'/);
+  assert.match(staffSource, /availableLocationsByCity/);
+  assert.match(staffSource, /!location\.manager_tg_id \|\| location\.manager_tg_id === editStaff\?\.tg_id/);
+  assert.match(staffSource, /t\('admin\.staff\.deleteTitle'\)/);
+  assert.match(staffSource, /t\('admin\.staff\.deleteAria'\)/);
   assert.match(staffSource, /city_ids/);
   assert.match(staffSource, /location_ids/);
   assert.match(staffSource, /username: member\.username \|\| ''/);
@@ -135,6 +140,8 @@ test('admin api exposes staff methods and types', () => {
   assert.match(adminApiSource, /createStaff:/);
   assert.match(adminApiSource, /updateStaff:/);
   assert.match(adminApiSource, /deleteStaff:/);
+  assert.match(adminApiSource, /hardDeleteStaff:/);
+  assert.match(adminApiSource, /\/api\/admin\/staff\/\$\{id\}\/hard-delete/);
 });
 
 test('location types expose computed manager catalog availability', () => {

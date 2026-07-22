@@ -13,6 +13,7 @@ from webapp.routes.admin import (
     admin_create_staff_member,
     admin_delete_staff_member,
     admin_get_access,
+    admin_hard_delete_staff_member,
     admin_list_staff_members,
     admin_update_staff_member,
 )
@@ -357,6 +358,26 @@ class AdminStaffContractTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(raised.exception.status_code, 409)
         self.assertEqual(raised.exception.code, ErrorCode.STAFF_ASSIGNMENT_DUPLICATE)
+
+    async def test_hard_delete_staff_member_removes_row_and_allows_tg_id_reuse(self):
+        async with self.session_maker() as session:
+            created = await admin_create_staff_member(
+                CreateStaffMemberRequest(tg_id=10016, role="inpost_curator", city_ids=[], location_ids=[]),
+                actor=self.admin_actor,
+                session=session,
+            )
+
+            await admin_hard_delete_staff_member(created.id, actor=self.admin_actor, session=session)
+            rows = await admin_list_staff_members(actor=self.admin_actor, session=session)
+            recreated = await admin_create_staff_member(
+                CreateStaffMemberRequest(tg_id=10016, role="project_admin", city_ids=[], location_ids=[]),
+                actor=self.admin_actor,
+                session=session,
+            )
+
+        self.assertEqual([row.tg_id for row in rows], [])
+        self.assertEqual(recreated.tg_id, 10016)
+        self.assertEqual(recreated.role, "project_admin")
 
     async def test_inactive_tg_id_is_reactivated_with_replaced_role(self):
         async with self.session_maker() as session:

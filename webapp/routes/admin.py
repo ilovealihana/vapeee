@@ -364,6 +364,23 @@ async def admin_delete_staff_member(
 
 # ── Cities ────────────────────────────────────────────────
 
+@router.delete("/staff/{staff_id}/hard-delete", status_code=204)
+async def admin_hard_delete_staff_member(
+    staff_id: int,
+    actor=Depends(get_project_admin_user),
+    session: AsyncSession = Depends(get_session),
+):
+    await _require_project_admin(actor, session)
+    member = await _load_staff_member(session, staff_id)
+    if member is None:
+        raise api_error(404, ErrorCode.STAFF_ASSIGNMENT_NOT_FOUND, "Staff member not found")
+    if _is_protected_bootstrap_admin(member.tg_id):
+        raise api_error(403, ErrorCode.STAFF_CANNOT_DELETE_PROTECTED_ADMIN, "Cannot delete protected admin")
+
+    await session.delete(member)
+    await session.commit()
+
+
 @router.get("/cities", response_model=list[CitySchema])
 async def admin_list_cities(
     _=Depends(get_project_admin_user),

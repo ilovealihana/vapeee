@@ -168,4 +168,6 @@ export const adminApi = {
     req<AdminStaffMember>(`/api/admin/staff/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteStaff: (id: number) =>
     req<void>(`/api/admin/staff/${id}`, { method: 'DELETE' }),
+  hardDeleteStaff: (id: number) =>
+    req<void>(`/api/admin/staff/${id}/hard-delete`, { method: 'DELETE' }),
 };

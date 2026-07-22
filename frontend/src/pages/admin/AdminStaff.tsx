@@ -41,13 +41,15 @@ export default function AdminStaff() {
   const [form, setForm] = useState<StaffForm>(emptyForm);
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
 
-  const locationsByCity = useMemo(() => {
+  const availableLocationsByCity = useMemo(() => {
     const grouped: Record<number, AdminLocation[]> = {};
     for (const location of locations) {
-      grouped[location.city_id] = [...(grouped[location.city_id] || []), location];
+      if (!location.manager_tg_id || location.manager_tg_id === editStaff?.tg_id) {
+        grouped[location.city_id] = [...(grouped[location.city_id] || []), location];
+      }
     }
     return grouped;
-  }, [locations]);
+  }, [locations, editStaff?.tg_id]);
 
   const roleLabel = (role: AdminStaffRole) => t(`admin.staff.roles.${role}`);
 
@@ -140,6 +142,15 @@ export default function AdminStaff() {
     }
   };
 
+  const hardDeleteStaff = async (member: AdminStaffMember) => {
+    try {
+      await adminApi.hardDeleteStaff(member.id);
+      await load();
+    } catch (e: any) {
+      setError(e.message);
+    }
+  };
+
   const reactivateStaff = async (member: AdminStaffMember) => {
     try {
       await adminApi.updateStaff(member.id, { is_active: true });
@@ -192,22 +203,50 @@ export default function AdminStaff() {
                   <Icon name="edit" size={16} />
                 </button>
                 {member.is_active ? (
-                  <button
-                    className="admin-icon-button admin-icon-button-danger"
-                    type="button"
-                    onClick={() => setConfirmAction({
-                      title: t('admin.staff.deactivateTitle'),
-                      message: t('admin.staff.deactivateMessage').replace('{tgId}', String(member.tg_id)),
-                      onConfirm: () => deactivateStaff(member),
-                    })}
-                    aria-label={t('admin.staff.deactivateAria')}
-                  >
-                    <Icon name="trash" size={16} />
-                  </button>
+                  <>
+                    <button
+                      className="admin-icon-button"
+                      type="button"
+                      onClick={() => setConfirmAction({
+                        title: t('admin.staff.deactivateTitle'),
+                        message: t('admin.staff.deactivateMessage').replace('{tgId}', String(member.tg_id)),
+                        onConfirm: () => deactivateStaff(member),
+                      })}
+                      aria-label={t('admin.staff.deactivateAria')}
+                    >
+                      <Icon name="x" size={16} />
+                    </button>
+                    <button
+                      className="admin-icon-button admin-icon-button-danger"
+                      type="button"
+                      onClick={() => setConfirmAction({
+                        title: t('admin.staff.deleteTitle'),
+                        message: t('admin.staff.deleteMessage').replace('{tgId}', String(member.tg_id)),
+                        onConfirm: () => hardDeleteStaff(member),
+                      })}
+                      aria-label={t('admin.staff.deleteAria')}
+                    >
+                      <Icon name="trash" size={16} />
+                    </button>
+                  </>
                 ) : (
-                  <button className="admin-icon-button" type="button" onClick={() => reactivateStaff(member)} aria-label={t('admin.staff.reactivateAria')}>
-                    <Icon name="check" size={16} />
-                  </button>
+                  <>
+                    <button className="admin-icon-button" type="button" onClick={() => reactivateStaff(member)} aria-label={t('admin.staff.reactivateAria')}>
+                      <Icon name="check" size={16} />
+                    </button>
+                    <button
+                      className="admin-icon-button admin-icon-button-danger"
+                      type="button"
+                      onClick={() => setConfirmAction({
+                        title: t('admin.staff.deleteTitle'),
+                        message: t('admin.staff.deleteMessage').replace('{tgId}', String(member.tg_id)),
+                        onConfirm: () => hardDeleteStaff(member),
+                      })}
+                      aria-label={t('admin.staff.deleteAria')}
+                    >
+                      <Icon name="trash" size={16} />
+                    </button>
+                  </>
                 )}
               </div>
             </div>
@@ -288,7 +327,7 @@ export default function AdminStaff() {
                 {cities.map((city) => (
                   <div key={city.id} className="admin-check-group">
                     <span className="muted">{city.name}</span>
-                    {(locationsByCity[city.id] || []).map((location) => (
+                    {(availableLocationsByCity[city.id] || []).map((location) => (
                       <label key={location.id} className="admin-check-row">
                         <input
                           type="checkbox"
