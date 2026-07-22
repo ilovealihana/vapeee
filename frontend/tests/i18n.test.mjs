@@ -140,7 +140,8 @@ test('customer copied pages use i18n keys and real cart/catalog flows', async ()
   }
 
   assert.match(sources[0], /useMemo\(\(\) => build\w+Markup\(t\), \[t\]\)/);
-  assert.match(sources[3], /useMemo\(\(\) => build\w+Markup\(t\), \[t\]\)/);
+  assert.match(sources[3], /buildProfileMarkup\(\{[\s\S]*t,[\s\S]*user,[\s\S]*orders,[\s\S]*hasAdminAccess,[\s\S]*activeLocale/);
+  assert.match(sources[3], /\[t, user, orders, hasAdminAccess, activeLocale, activeProfileTab\]/);
   assert.match(sources[0], /t\('home\.greeting'\)/);
   assert.match(sources[0], /t\('home\.popular'\)/);
   assert.match(sources[0], /data-home-action="catalog"/);

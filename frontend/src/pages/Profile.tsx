@@ -1,74 +1,226 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { adminApi } from '../api/admin';
+import { api, type Order, type User } from '../api/client';
 import CopiedBottomNav from '../components/CopiedBottomNav';
 import CopiedPageTitle from '../components/CopiedPageTitle';
 import CopiedSmokeBackground from '../components/CopiedSmokeBackground';
 import CopiedTopBar from '../components/CopiedTopBar';
-import { useI18n } from '../i18n';
+import { type ActiveLocale, useI18n } from '../i18n';
 import { useCartStore } from '../store/cart';
 import { useUserStore } from '../store/user';
 import { selectProfileLanguage } from './profileInteractions';
 
-function buildProfileMarkup(t: (key: string) => string) {
-  return String.raw`
-<div class="copied-profile-shell font-body-md text-body-md selection:bg-primary/30 selection:text-primary">
-  <div class="relative z-10 min-h-screen flex flex-col w-full">
+type Translate = (key: string) => string;
 
-    <main class="flex-1 overflow-y-auto px-margin-page pb-32 pt-2 space-y-stack-lg custom-scrollbar">
-      <section class="flex flex-col items-center space-y-4">
-        <div class="relative">
-          <div class="w-24 h-24 rounded-full bg-surface-container-high border-2 border-outline-variant flex items-center justify-center overflow-hidden shadow-2xl">
-            <span class="text-headline-lg font-headline-lg text-primary">P</span>
-          </div>
-          <div class="absolute bottom-0 right-0 w-8 h-8 bg-primary rounded-full flex items-center justify-center border-4 border-surface-dim">
-            <span class="material-symbols-outlined text-[16px] text-on-primary">edit</span>
-          </div>
-        </div>
-        <div class="text-center">
-          <h2 class="text-headline-sm font-headline-sm text-on-surface">paranoia</h2>
-          <p class="text-label-lg font-label-lg text-on-surface-variant">@shinigami_qq</p>
-        </div>
-      </section>
+type OrderItem = {
+  quantity?: number;
+  variant_id?: number;
+  product_name?: string;
+  name?: string;
+  variant?: {
+    name_ru?: string;
+    name_pl?: string;
+    name_uk?: string;
+  };
+  product?: {
+    name_ru?: string;
+    name_pl?: string;
+    name_uk?: string;
+  };
+};
 
-      <nav class="profile-tab-nav border-b border-outline-variant/30 pb-2" role="tablist" aria-label="${t('profile.tabsAria')}">
-        <button id="profile-tab-profile" data-profile-tab="profile" class="px-2 pb-2 active-tab-indicator flex items-center gap-2 text-primary font-medium" type="button" role="tab" aria-selected="true" aria-controls="profile-panel-profile">
-          <span class="material-symbols-outlined text-sm">person</span>
-          <span class="text-label-lg font-label-lg">${t('profile.tabs.profile')}</span>
-        </button>
-        <button id="profile-tab-orders" data-profile-tab="orders" class="px-2 pb-2 flex items-center gap-2 text-on-surface-variant hover:text-on-surface transition-colors" type="button" role="tab" aria-selected="false" aria-controls="profile-panel-orders">
-          <span class="material-symbols-outlined text-sm" style="font-variation-settings: &quot;FILL&quot; 0;">receipt_long</span>
-          <span class="text-label-lg font-label-lg">${t('profile.tabs.orders')}</span>
-        </button>
-        <button id="profile-tab-language" data-profile-tab="language" class="px-2 pb-2 flex items-center gap-2 text-on-surface-variant hover:text-on-surface transition-colors" type="button" role="tab" aria-selected="false" aria-controls="profile-panel-language">
-          <span class="material-symbols-outlined text-sm" style="font-variation-settings: &quot;FILL&quot; 0;">language</span>
-          <span class="text-label-lg font-label-lg">${t('profile.tabs.language')}</span>
-        </button>
-      </nav>
+type ProfileTab = 'profile' | 'orders' | 'language';
 
-      <section id="profile-panel-profile" class="profile-panel space-y-stack-lg" data-profile-panel="profile" role="tabpanel" aria-labelledby="profile-tab-profile">
-        <div class="profile-info-surface divide-y divide-outline-variant/20">
-          <div class="flex justify-between items-center p-4">
-            <span class="text-on-surface-variant font-label-lg text-label-lg">${t('profile.fields.username')}</span>
-            <span class="text-on-surface font-body-md text-body-md">@shinigami_qq</span>
-          </div>
-          <div class="flex justify-between items-center p-4">
-            <span class="text-on-surface-variant font-label-lg text-label-lg">${t('profile.fields.phone')}</span>
-            <span class="text-on-surface font-body-md text-body-md text-opacity-40">—</span>
-          </div>
-          <div class="flex justify-between items-center p-4">
-            <span class="text-on-surface-variant font-label-lg text-label-lg">${t('profile.fields.email')}</span>
-            <span class="text-on-surface font-body-md text-body-md text-opacity-40">—</span>
-          </div>
-          <div class="flex justify-between items-center p-4">
-            <span class="text-on-surface-variant font-label-lg text-label-lg">${t('profile.fields.language')}</span>
-            <span class="text-on-surface font-body-md text-body-md" data-profile-language-current>${t('profile.languages.ru')}</span>
-          </div>
-          <div class="flex justify-between items-center p-4">
-            <span class="text-on-surface-variant font-label-lg text-label-lg">${t('profile.fields.betaSince')}</span>
-            <span class="text-on-surface font-body-md text-body-md">16.07.2024</span>
-          </div>
-        </div>
+function escapeHtml(value: unknown): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
 
+function dash(value?: string | number | null): string {
+  if (value === undefined || value === null || value === '') {
+    return '<span class="text-on-surface font-body-md text-body-md text-opacity-40">—</span>';
+  }
+
+  return `<span class="text-on-surface font-body-md text-body-md">${escapeHtml(value)}</span>`;
+}
+
+function displayName(user: User | null, t: Translate): string {
+  const fullName = [user?.first_name, user?.last_name].filter(Boolean).join(' ').trim();
+  return fullName || user?.username || t('profile.title');
+}
+
+function initial(user: User | null, t: Translate): string {
+  const source = displayName(user, t).trim();
+  return source ? source.charAt(0).toUpperCase() : '?';
+}
+
+function formatProfileDate(dateStr?: string, locale = 'ru-RU'): string {
+  if (!dateStr) return '—';
+
+  const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) return '—';
+
+  return new Intl.DateTimeFormat(locale).format(date);
+}
+
+function formatOrderDate(dateStr?: string, locale = 'ru-RU'): string {
+  if (!dateStr) return '—';
+
+  const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) return '—';
+
+  return new Intl.DateTimeFormat(locale, {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
+}
+
+function orderStatusClass(status: string): string {
+  return status === 'completed' || status === 'ready' ? 'done' : 'active';
+}
+
+function orderStatusLabel(status: string, t: Translate): string {
+  const knownStatuses = new Set(['new', 'confirmed', 'ready', 'completed', 'cancelled', 'processing']);
+  if (!knownStatuses.has(status)) return status;
+
+  const key = `profile.ordersPanel.status.${status}`;
+  const label = t(key);
+  return label === key ? status : label;
+}
+
+function deliveryLabel(type: string, t: Translate): string {
+  if (type === 'pickup') return t('profile.ordersPanel.delivery.pickup');
+  if (type === 'door_delivery' || type === 'door') return t('profile.ordersPanel.delivery.door');
+  if (type === 'inpost') return 'InPost';
+  return type;
+}
+
+function positionLabel(count: number, t: Translate): string {
+  const absoluteCount = Math.abs(count);
+  const lastDigit = absoluteCount % 10;
+  const lastTwoDigits = absoluteCount % 100;
+
+  if (lastDigit === 1 && lastTwoDigits !== 11) return t('profile.ordersPanel.positions.one');
+  if (lastDigit >= 2 && lastDigit <= 4 && (lastTwoDigits < 12 || lastTwoDigits > 14)) {
+    return t('profile.ordersPanel.positions.few');
+  }
+  return t('profile.ordersPanel.positions.many');
+}
+
+function itemName(item: OrderItem): string {
+  return (
+    item.variant?.name_ru ||
+    item.product?.name_ru ||
+    item.product_name ||
+    item.name ||
+    (item.variant_id ? `#${item.variant_id}` : '')
+  );
+}
+
+function orderItemsSummary(order: Order, t: Translate): string {
+  const items = (Array.isArray(order.items) ? order.items : []) as OrderItem[];
+  if (items.length === 0) return t('profile.ordersPanel.description');
+
+  return items
+    .map((item, index) => {
+      const name = itemName(item) || `${t('profile.ordersPanel.positions.one')} ${index + 1}`;
+      const quantity = Number(item.quantity ?? 1);
+      return `${name} × ${quantity}`;
+    })
+    .join(', ');
+}
+
+function orderItemsCount(order: Order): number {
+  const items = (Array.isArray(order.items) ? order.items : []) as OrderItem[];
+  return items.reduce((sum, item) => sum + Number(item.quantity ?? 1), 0);
+}
+
+function formatMoney(value?: string | number): string {
+  const amount = Number(value ?? 0);
+  if (!Number.isFinite(amount)) return '0.00 zł';
+
+  return `${amount.toFixed(2)} zł`;
+}
+
+function profileLanguageLabel(languageCode: string | undefined, t: Translate): string {
+  if (languageCode === 'en') return t('profile.languages.en');
+  if (languageCode === 'pl') return t('profile.languages.pl');
+  if (languageCode === 'uk') return t('profile.languages.uk');
+  return t('profile.languages.ru');
+}
+
+function tabClass(tab: ProfileTab, activeTab: ProfileTab): string {
+  const baseClass = 'px-2 pb-2 flex items-center gap-2';
+  if (tab === activeTab) {
+    return `${baseClass} active-tab-indicator text-primary font-medium`;
+  }
+
+  return `${baseClass} text-on-surface-variant hover:text-on-surface transition-colors`;
+}
+
+function buildOrderCards(orders: Order[], t: Translate): string {
+  if (orders.length === 0) {
+    return String.raw`
+          <div class="profile-empty-state">
+            <span class="material-symbols-outlined">receipt_long</span>
+            <strong>${t('profile.ordersPanel.emptyTitle')}</strong>
+            <p>${t('profile.ordersPanel.emptyDescription')}</p>
+          </div>`;
+  }
+
+  return orders.map((order) => {
+    const itemsCount = orderItemsCount(order);
+
+    return String.raw`
+          <article class="profile-order-card">
+            <div class="profile-order-top">
+              <div>
+                <strong>#${escapeHtml(order.id)}</strong>
+                <span>${escapeHtml(formatOrderDate(order.created_at))}</span>
+              </div>
+              <mark class="profile-order-status ${orderStatusClass(order.status)}">${escapeHtml(orderStatusLabel(order.status, t))}</mark>
+            </div>
+            <div class="profile-order-body">
+              <span>${escapeHtml(orderItemsSummary(order, t))}</span>
+              <span>${escapeHtml(deliveryLabel(order.delivery_type, t))}</span>
+            </div>
+            <div class="profile-order-bottom">
+              <span>${itemsCount} ${escapeHtml(positionLabel(itemsCount, t))}</span>
+              <strong>${escapeHtml(formatMoney(order.total))}</strong>
+            </div>
+          </article>`;
+  }).join('');
+}
+
+function buildProfileMarkup({
+  t,
+  user,
+  orders,
+  hasAdminAccess,
+  activeLocale,
+  activeTab,
+}: {
+  t: Translate;
+  user: User | null;
+  orders: Order[];
+  hasAdminAccess: boolean;
+  activeLocale: ActiveLocale;
+  activeTab: ProfileTab;
+}) {
+  const name = displayName(user, t);
+  const username = user?.username ? `@${user.username}` : '—';
+  const profileLanguage = profileLanguageLabel(user?.language_code, t);
+  const locale = activeLocale === 'ru' ? 'ru-RU' : activeLocale;
+  const adminPanel = hasAdminAccess
+    ? String.raw`
         <section>
           <button data-profile-action="admin" class="w-full group bg-surface-container-high hover:bg-surface-container-highest transition-all duration-300 rounded-xl p-4 flex items-center justify-between active:scale-[0.98]">
             <div class="flex items-center gap-4">
@@ -82,7 +234,73 @@ function buildProfileMarkup(t: (key: string) => string) {
             </div>
             <span class="material-symbols-outlined text-on-surface-variant group-hover:text-primary transition-colors">chevron_right</span>
           </button>
-        </section>
+        </section>`
+    : '';
+
+  return String.raw`
+<div class="copied-profile-shell font-body-md text-body-md selection:bg-primary/30 selection:text-primary">
+  <div class="relative z-10 min-h-screen flex flex-col w-full">
+
+    <main class="flex-1 overflow-y-auto px-margin-page pb-32 pt-2 space-y-stack-lg custom-scrollbar">
+      <section class="flex flex-col items-center space-y-4">
+        <div class="relative">
+          <div class="w-24 h-24 rounded-full bg-surface-container-high border-2 border-outline-variant flex items-center justify-center overflow-hidden shadow-2xl">
+            <span class="text-headline-lg font-headline-lg text-primary">${escapeHtml(initial(user, t))}</span>
+          </div>
+          <div class="absolute bottom-0 right-0 w-8 h-8 bg-primary rounded-full flex items-center justify-center border-4 border-surface-dim">
+            <span class="material-symbols-outlined text-[16px] text-on-primary">edit</span>
+          </div>
+        </div>
+        <div class="text-center">
+          <h2 class="text-headline-sm font-headline-sm text-on-surface">${escapeHtml(name)}</h2>
+          <p class="text-label-lg font-label-lg text-on-surface-variant">${escapeHtml(username)}</p>
+        </div>
+      </section>
+
+      <nav class="profile-tab-nav border-b border-outline-variant/30 pb-2" role="tablist" aria-label="${t('profile.tabsAria')}">
+        <button id="profile-tab-profile" data-profile-tab="profile" class="${tabClass('profile', activeTab)}" type="button" role="tab" aria-selected="${activeTab === 'profile'}" aria-controls="profile-panel-profile">
+          <span class="material-symbols-outlined text-sm">person</span>
+          <span class="text-label-lg font-label-lg">${t('profile.tabs.profile')}</span>
+        </button>
+        <button id="profile-tab-orders" data-profile-tab="orders" class="${tabClass('orders', activeTab)}" type="button" role="tab" aria-selected="${activeTab === 'orders'}" aria-controls="profile-panel-orders">
+          <span class="material-symbols-outlined text-sm" style="font-variation-settings: &quot;FILL&quot; 0;">receipt_long</span>
+          <span class="text-label-lg font-label-lg">${t('profile.tabs.orders')}</span>
+        </button>
+        <button id="profile-tab-language" data-profile-tab="language" class="${tabClass('language', activeTab)}" type="button" role="tab" aria-selected="${activeTab === 'language'}" aria-controls="profile-panel-language">
+          <span class="material-symbols-outlined text-sm" style="font-variation-settings: &quot;FILL&quot; 0;">language</span>
+          <span class="text-label-lg font-label-lg">${t('profile.tabs.language')}</span>
+        </button>
+      </nav>
+
+      <section id="profile-panel-profile" class="profile-panel space-y-stack-lg" data-profile-panel="profile" role="tabpanel" aria-labelledby="profile-tab-profile"${activeTab === 'profile' ? '' : ' hidden'}>
+        <div class="profile-info-surface divide-y divide-outline-variant/20">
+          <div class="flex justify-between items-center p-4">
+            <span class="text-on-surface-variant font-label-lg text-label-lg">${t('profile.fields.username')}</span>
+            ${dash(username)}
+          </div>
+          <div class="flex justify-between items-center p-4">
+            <span class="text-on-surface-variant font-label-lg text-label-lg">${t('profile.fields.telegramId')}</span>
+            ${dash(user?.tg_id)}
+          </div>
+          <div class="flex justify-between items-center p-4">
+            <span class="text-on-surface-variant font-label-lg text-label-lg">${t('profile.fields.phone')}</span>
+            ${dash(user?.phone)}
+          </div>
+          <div class="flex justify-between items-center p-4">
+            <span class="text-on-surface-variant font-label-lg text-label-lg">${t('profile.fields.email')}</span>
+            ${dash(user?.email)}
+          </div>
+          <div class="flex justify-between items-center p-4">
+            <span class="text-on-surface-variant font-label-lg text-label-lg">${t('profile.fields.language')}</span>
+            <span class="text-on-surface font-body-md text-body-md" data-profile-language-current>${profileLanguage}</span>
+          </div>
+          <div class="flex justify-between items-center p-4">
+            <span class="text-on-surface-variant font-label-lg text-label-lg">${t('profile.fields.betaSince')}</span>
+            <span class="text-on-surface font-body-md text-body-md">${escapeHtml(formatProfileDate(user?.created_at, locale))}</span>
+          </div>
+        </div>
+
+${adminPanel}
 
         <section class="space-y-stack-sm">
           <button class="w-full p-4 rounded-xl flex items-center gap-4 hover:bg-surface-variant/50 transition-colors">
@@ -100,73 +318,21 @@ function buildProfileMarkup(t: (key: string) => string) {
         </section>
       </section>
 
-      <section id="profile-panel-orders" class="profile-panel" data-profile-panel="orders" role="tabpanel" aria-labelledby="profile-tab-orders" hidden>
+      <section id="profile-panel-orders" class="profile-panel" data-profile-panel="orders" role="tabpanel" aria-labelledby="profile-tab-orders"${activeTab === 'orders' ? '' : ' hidden'}>
         <div class="profile-panel-heading">
           <div>
             <h3>${t('profile.ordersPanel.title')}</h3>
             <p>${t('profile.ordersPanel.description')}</p>
           </div>
-          <span class="profile-panel-count">3</span>
+          <span class="profile-panel-count">${orders.length}</span>
         </div>
 
         <div class="profile-order-list">
-          <article class="profile-order-card">
-            <div class="profile-order-top">
-              <div>
-                <strong>#PL-1028</strong>
-                <span>${t('profile.ordersPanel.today')}, 18:40</span>
-              </div>
-              <mark class="profile-order-status active">${t('profile.ordersPanel.status.processing')}</mark>
-            </div>
-            <div class="profile-order-body">
-              <span>ELFLIQ Pink Lemonade</span>
-              <span>${t('profile.ordersPanel.delivery.pickup')} · Warszawa Centrum</span>
-            </div>
-            <div class="profile-order-bottom">
-              <span>2 ${t('profile.ordersPanel.positions.few')}</span>
-              <strong>99.80 zł</strong>
-            </div>
-          </article>
-
-          <article class="profile-order-card">
-            <div class="profile-order-top">
-              <div>
-                <strong>#PL-1019</strong>
-                <span>14.07.2026</span>
-              </div>
-              <mark class="profile-order-status done">${t('profile.ordersPanel.status.completed')}</mark>
-            </div>
-            <div class="profile-order-body">
-              <span>XROS 3 Mini</span>
-              <span>${t('profile.ordersPanel.delivery.door')} · Krakow</span>
-            </div>
-            <div class="profile-order-bottom">
-              <span>1 ${t('profile.ordersPanel.positions.one')}</span>
-              <strong>144.00 zł</strong>
-            </div>
-          </article>
-
-          <article class="profile-order-card">
-            <div class="profile-order-top">
-              <div>
-                <strong>#PL-1007</strong>
-                <span>02.07.2026</span>
-              </div>
-              <mark class="profile-order-status done">${t('profile.ordersPanel.status.completed')}</mark>
-            </div>
-            <div class="profile-order-body">
-              <span>CHASER Triple Berry</span>
-              <span>${t('profile.ordersPanel.delivery.pickup')} · Wroclaw Market</span>
-            </div>
-            <div class="profile-order-bottom">
-              <span>3 ${t('profile.ordersPanel.positions.few')}</span>
-              <strong>165.00 zł</strong>
-            </div>
-          </article>
+${buildOrderCards(orders, t)}
         </div>
       </section>
 
-      <section id="profile-panel-language" class="profile-panel" data-profile-panel="language" role="tabpanel" aria-labelledby="profile-tab-language" hidden>
+      <section id="profile-panel-language" class="profile-panel" data-profile-panel="language" role="tabpanel" aria-labelledby="profile-tab-language"${activeTab === 'language' ? '' : ' hidden'}>
         <div class="profile-panel-heading">
           <div>
             <h3>${t('profile.languagePanel.title')}</h3>
@@ -218,10 +384,48 @@ function buildProfileMarkup(t: (key: string) => string) {
 
 export default function Profile() {
   const navigate = useNavigate();
+  const user = useUserStore((state) => state.user);
+  const fetchUser = useUserStore((state) => state.fetchUser);
   const activeLocale = useUserStore((state) => state.activeLocale);
   const itemCount = useCartStore((state) => state.itemCount);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [hasAdminAccess, setHasAdminAccess] = useState(false);
+  const [activeProfileTab, setActiveProfileTab] = useState<ProfileTab>('profile');
   const { t } = useI18n(activeLocale);
-  const profileMarkup = useMemo(() => buildProfileMarkup(t), [t]);
+
+  useEffect(() => {
+    if (!user) {
+      void fetchUser();
+    }
+  }, [fetchUser, user]);
+
+  useEffect(() => {
+    let isMounted = true;
+    api.orders.list()
+      .then((nextOrders) => {
+        if (isMounted) setOrders(nextOrders);
+      })
+      .catch(() => {
+        if (isMounted) setOrders([]);
+      });
+
+    adminApi.getAccess()
+      .then((access) => {
+        if (isMounted) setHasAdminAccess(Boolean(access.has_access));
+      })
+      .catch(() => {
+        if (isMounted) setHasAdminAccess(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const profileMarkup = useMemo(
+    () => buildProfileMarkup({ t, user, orders, hasAdminAccess, activeLocale, activeTab: activeProfileTab }),
+    [t, user, orders, hasAdminAccess, activeLocale, activeProfileTab],
+  );
 
   useEffect(() => {
     const interactiveElements = Array.from(document.querySelectorAll<HTMLElement>('.copied-profile-shell button, .copied-profile-shell a'));
@@ -247,7 +451,8 @@ export default function Profile() {
 
     const tabHandlers = tabButtons.map((button) => {
       const onClick = () => {
-        const nextTab = button.dataset.profileTab ?? 'profile';
+        const nextTab = (button.dataset.profileTab ?? 'profile') as ProfileTab;
+        setActiveProfileTab(nextTab);
         tabButtons.forEach((tab) => {
           const isActive = tab === button;
           tab.classList.toggle('active-tab-indicator', isActive);
@@ -281,7 +486,7 @@ export default function Profile() {
       languageHandlers.forEach((cleanup) => cleanup());
       adminButton?.removeEventListener('click', onAdminClick);
     };
-  }, [navigate]);
+  }, [navigate, profileMarkup]);
 
   return (
     <>

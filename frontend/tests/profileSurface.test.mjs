@@ -64,6 +64,28 @@ test('profile orders and language panels keep the copied commercial styling', ()
   assert.match(css, /\.profile-panel\[hidden\]\s*\{/);
 });
 
+test('profile renders real user, access and order data instead of hardcoded demo content', () => {
+  assert.match(profileSource, /const user = useUserStore\(\(state\) => state\.user\)/);
+  assert.match(profileSource, /const \[orders, setOrders\] = useState<Order\[\]>\(\[\]\)/);
+  assert.match(profileSource, /api\.orders\.list\(\)/);
+  assert.match(profileSource, /adminApi\.getAccess\(\)/);
+  assert.match(profileSource, /buildProfileMarkup\(\{[\s\S]*user,[\s\S]*orders,[\s\S]*hasAdminAccess/);
+  assert.match(profileSource, /data-profile-action="admin"/);
+  assert.match(profileSource, /orders\.map/);
+  assert.match(profileSource, /formatProfileDate\(user\?\.created_at/);
+  assert.match(profileSource, /const \[activeProfileTab, setActiveProfileTab\] = useState<ProfileTab>\('profile'\)/);
+  assert.match(profileSource, /activeTab: activeProfileTab/);
+  assert.match(profileSource, /setActiveProfileTab\(nextTab\)/);
+  assert.match(profileSource, /profile\.ordersPanel\.emptyTitle/);
+  assert.doesNotMatch(profileSource, /profile-order-status done">0/);
+  assert.doesNotMatch(profileSource, /formatMoney\(0\)/);
+  assert.doesNotMatch(profileSource, /profile\.ordersPanel\.delivery\.pickup'\)} · InPost/);
+  assert.doesNotMatch(profileSource, /paranoia/);
+  assert.doesNotMatch(profileSource, /shinigami_qq/);
+  assert.doesNotMatch(profileSource, /#PL-1028/);
+  assert.doesNotMatch(profileSource, /ELFLIQ Pink Lemonade/);
+});
+
 test('active profile tabs use the same highlighted color for every tab', () => {
   assert.match(css, /\.copied-profile-shell \[data-profile-tab\]\.active-tab-indicator\s*\{[^}]*color:\s*#8dd2d7 !important;/s);
   assert.match(css, /\.copied-profile-shell \[data-profile-tab\]\.active-tab-indicator \.material-symbols-outlined\s*\{[^}]*color:\s*#8dd2d7 !important;/s);

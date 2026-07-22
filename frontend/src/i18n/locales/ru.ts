@@ -197,6 +197,7 @@ const ru = {
     },
     fields: {
       username: 'Username',
+      telegramId: 'Telegram ID',
       phone: 'Телефон',
       email: 'Email',
       language: 'Язык',
@@ -220,10 +221,16 @@ const ru = {
     ordersPanel: {
       title: 'История заказов',
       description: 'Последние покупки и их текущий статус',
+      emptyTitle: 'Заказов пока нет',
+      emptyDescription: 'Когда вы оформите заказ, он появится здесь.',
       today: 'Сегодня',
       status: {
+        new: 'Новый',
+        confirmed: 'Подтвержден',
+        ready: 'Готов',
         processing: 'В обработке',
         completed: 'Завершен',
+        cancelled: 'Отменен',
       },
       delivery: {
         pickup: 'Самовывоз',
