@@ -1,25 +1,28 @@
 import { useEffect, useState } from 'react';
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { adminApi } from '../../api/admin';
 import Icon from '../../components/Icon';
 import { useI18n } from '../../i18n';
 import { useUserStore } from '../../store/user';
 
 const tabs = [
-  { path: '/admin/cities', labelKey: 'admin.layout.tabs.cities', icon: 'mapPin' as const },
-  { path: '/admin/products', labelKey: 'admin.layout.tabs.products', icon: 'package' as const },
-  { path: '/admin/stock', labelKey: 'admin.layout.tabs.stock', icon: 'box' as const },
-  { path: '/admin/orders', labelKey: 'admin.layout.tabs.orders', icon: 'orders' as const },
-  { path: '/admin/staff', labelKey: 'admin.layout.tabs.staff', icon: 'user' as const },
+  { path: '/admin/product-requests', labelKey: 'admin.layout.tabs.productRequests', icon: 'tag' as const, roles: ['project_admin', 'city_curator', 'point_manager'] },
+  { path: '/admin/cities', labelKey: 'admin.layout.tabs.cities', icon: 'mapPin' as const, roles: ['project_admin'] },
+  { path: '/admin/products', labelKey: 'admin.layout.tabs.products', icon: 'package' as const, roles: ['project_admin'] },
+  { path: '/admin/stock', labelKey: 'admin.layout.tabs.stock', icon: 'box' as const, roles: ['project_admin'] },
+  { path: '/admin/orders', labelKey: 'admin.layout.tabs.orders', icon: 'orders' as const, roles: ['project_admin'] },
+  { path: '/admin/staff', labelKey: 'admin.layout.tabs.staff', icon: 'user' as const, roles: ['project_admin'] },
 ];
 
 export default function AdminLayout() {
   const { user, fetchUser, error, activeLocale } = useUserStore();
   const { t } = useI18n(activeLocale);
   const navigate = useNavigate();
+  const location = useLocation();
   const [checking, setChecking] = useState(true);
   const [hasAdminAccess, setHasAdminAccess] = useState(false);
   const [adminRole, setAdminRole] = useState<string>('');
+  const allowedTabs = tabs.filter((tab) => adminRole === 'project_admin' || tab.roles.includes(adminRole as any));
 
   useEffect(() => {
     (async () => {
@@ -39,6 +42,13 @@ export default function AdminLayout() {
   useEffect(() => {
     if (!checking && !hasAdminAccess) navigate('/');
   }, [checking, hasAdminAccess]);
+
+  useEffect(() => {
+    if (checking || !hasAdminAccess || !adminRole) return;
+    if (!allowedTabs.some((tab) => tab.path === location.pathname)) {
+      navigate('/admin/product-requests', { replace: true });
+    }
+  }, [checking, hasAdminAccess, adminRole, location.pathname]);
 
   if (checking) return <div className="page admin-page"><div className="spinner" /></div>;
   if (!user || !hasAdminAccess) {
@@ -76,12 +86,12 @@ export default function AdminLayout() {
           </div>
         </div>
         <div className="admin-cms-user">
-          <span className="tag tag-accent"><Icon name="shield" size={14} /> {adminRole || 'Admin'}</span>
+          <span className="tag tag-accent"><Icon name="shield" size={14} /> {adminRole}</span>
           <span className="muted">ID {user.tg_id}</span>
         </div>
       </header>
       <nav className="admin-cms-tabs">
-        {tabs.map((tab) => (
+        {allowedTabs.map((tab) => (
           <NavLink key={tab.path} to={tab.path} className={({ isActive }) => isActive ? 'active' : ''}>
             <Icon name={tab.icon} size={16} /> {t(tab.labelKey)}
           </NavLink>

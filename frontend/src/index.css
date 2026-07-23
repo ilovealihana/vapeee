@@ -2032,6 +2032,41 @@ textarea.input {
   gap: 10px;
 }
 
+.admin-cms-section {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  padding: 16px;
+  margin-bottom: 18px;
+}
+
+.admin-cms-section-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 14px;
+}
+
+.admin-cms-section-header h3 {
+  font-size: 16px;
+  color: var(--primary);
+}
+
+.admin-cms-section-header span {
+  color: var(--secondary);
+  font-size: 13px;
+}
+
+.admin-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.admin-request-row {
+  grid-template-columns: minmax(180px, 1.5fr) minmax(120px, 1fr) minmax(80px, 0.6fr) auto auto;
+}
+
 .admin-cms-titlebar h1 {
   margin: 0;
   font-size: 20px;

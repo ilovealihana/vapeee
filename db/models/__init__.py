@@ -9,6 +9,7 @@ from db.models.location_stock import LocationStock
 from db.models.order import Order
 from db.models.order_item import OrderItem
 from db.models.product import Product
+from db.models.product_request import ProductRequest
 from db.models.product_variant import ProductVariant
 from db.models.staff import StaffAssignment, StaffMember
 from db.models.user import User
@@ -24,6 +25,7 @@ __all__ = [
     "Order",
     "OrderItem",
     "Product",
+    "ProductRequest",
     "ProductVariant",
     "StaffAssignment",
     "StaffMember",

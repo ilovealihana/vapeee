@@ -18,6 +18,7 @@ import AdminProducts from './pages/admin/AdminProducts';
 import AdminStock from './pages/admin/AdminStock';
 import AdminOrders from './pages/admin/AdminOrders';
 import AdminStaff from './pages/admin/AdminStaff';
+import AdminProductRequests from './pages/admin/AdminProductRequests';
 import './index.css';
 
 // Expand Telegram WebApp to full screen
@@ -53,7 +54,8 @@ export default function App() {
 
         {/* Admin routes — no BottomNav */}
         <Route path="/admin" element={<AdminLayout />}>
-          <Route index element={<Navigate to="/admin/cities" replace />} />
+          <Route index element={<Navigate to="/admin/product-requests" replace />} />
+          <Route path="product-requests" element={<AdminProductRequests />} />
           <Route path="cities" element={<AdminCities />} />
           <Route path="products" element={<AdminProducts />} />
           <Route path="stock" element={<AdminStock />} />

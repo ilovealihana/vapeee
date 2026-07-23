@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import select, delete
@@ -14,6 +15,15 @@ from db.models.location_stock import LocationStock
 from db.models.order import Order
 from db.models.order_item import OrderItem
 from db.models.product import Product
+from db.models.product_request import (
+    PRODUCT_REQUEST_ADD_STOCK,
+    PRODUCT_REQUEST_ADD_VARIANT,
+    PRODUCT_REQUEST_APPROVED,
+    PRODUCT_REQUEST_PENDING_REVIEW,
+    PRODUCT_REQUEST_REJECTED,
+    PRODUCT_REQUEST_TYPES,
+    ProductRequest,
+)
 from db.models.product_variant import ProductVariant
 from db.models.staff import (
     ROLE_CITY_CURATOR,
@@ -28,6 +38,7 @@ from db.repositories.catalog import CatalogRepository
 from db.repositories.order import OrderRepository
 from webapp.deps import (
     get_admin_user,
+    get_current_user,
     get_project_admin_role,
     get_project_admin_user,
     get_session,
@@ -45,6 +56,8 @@ from webapp.schemas import (
     UpdateStockRequest, UpdateOrderStatusRequest,
     CreateStaffMemberRequest, UpdateStaffMemberRequest,
     AdminAccessSchema, StaffAssignmentSchema, StaffMemberSchema,
+    CreateProductRequestRequest, ProductRequestLocationOption, ProductRequestOptions,
+    ProductRequestSchema, RejectProductRequestRequest,
 )
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -54,10 +67,18 @@ router = APIRouter(prefix="/api/admin", tags=["admin"])
 
 @router.get("/access", response_model=AdminAccessSchema)
 async def admin_get_access(
-    actor=Depends(get_project_admin_user),
+    actor=Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
     role = await get_project_admin_role(actor, session)
+    if role is None and hasattr(actor, "tg_id"):
+        result = await session.execute(
+            select(StaffMember.role).where(
+                StaffMember.tg_id == actor.tg_id,
+                StaffMember.is_active == True,
+            )
+        )
+        role = result.scalar_one_or_none()
     return AdminAccessSchema(has_access=role is not None, role=role)
 
 
@@ -379,6 +400,342 @@ async def admin_hard_delete_staff_member(
 
     await session.delete(member)
     await session.commit()
+
+
+# Product requests
+
+async def _active_staff_for_actor(actor, session: AsyncSession) -> StaffMember | None:
+    if not hasattr(actor, "tg_id"):
+        return None
+    result = await session.execute(
+        select(StaffMember)
+        .options(selectinload(StaffMember.assignments))
+        .where(StaffMember.tg_id == actor.tg_id, StaffMember.is_active == True)
+    )
+    return result.scalar_one_or_none()
+
+
+def _staff_city_ids(member: StaffMember | None) -> set[int]:
+    if member is None:
+        return set()
+    return {assignment.city_id for assignment in member.assignments if assignment.city_id is not None}
+
+
+def _staff_location_ids(member: StaffMember | None) -> set[int]:
+    if member is None:
+        return set()
+    return {assignment.location_id for assignment in member.assignments if assignment.location_id is not None}
+
+
+async def _load_product_request(session: AsyncSession, request_id: int) -> ProductRequest | None:
+    result = await session.execute(
+        select(ProductRequest)
+        .options(
+            selectinload(ProductRequest.city),
+            selectinload(ProductRequest.location),
+            selectinload(ProductRequest.product),
+            selectinload(ProductRequest.variant),
+        )
+        .where(ProductRequest.id == request_id)
+    )
+    return result.scalar_one_or_none()
+
+
+def _product_request_schema(request: ProductRequest) -> ProductRequestSchema:
+    return ProductRequestSchema(
+        id=request.id,
+        request_type=request.request_type,
+        status=request.status,
+        requester_user_id=request.requester_user_id,
+        requester_tg_id=request.requester_tg_id,
+        city_id=request.city_id,
+        city_name=request.city.name if request.city else None,
+        location_id=request.location_id,
+        location_name=request.location.name if request.location else None,
+        product_id=request.product_id,
+        product_name=request.product.name_ru if request.product else None,
+        variant_id=request.variant_id,
+        variant_name=request.variant.name_ru if request.variant else None,
+        variant_name_ru=request.variant_name_ru,
+        variant_name_pl=request.variant_name_pl,
+        variant_name_uk=request.variant_name_uk,
+        price_override=request.price_override,
+        quantity=request.quantity,
+        reject_reason=request.reject_reason,
+        published_variant_id=request.published_variant_id,
+        reviewer_tg_id=request.reviewer_tg_id,
+        created_at=request.created_at,
+        updated_at=request.updated_at,
+        reviewed_at=request.reviewed_at,
+    )
+
+
+async def _ensure_request_location(session: AsyncSession, location_id: int) -> tuple[City, Location]:
+    result = await session.execute(
+        select(City, Location)
+        .join(Location, Location.city_id == City.id)
+        .where(Location.id == location_id, Location.is_active == True, City.is_active == True)
+    )
+    row = result.one_or_none()
+    if row is None:
+        raise api_error(404, ErrorCode.PRODUCT_REQUEST_LOCATION_REQUIRED, "Local Point not found")
+    return row
+
+
+async def _ensure_active_product(session: AsyncSession, product_id: int) -> Product:
+    result = await session.execute(select(Product).where(Product.id == product_id, Product.is_active == True))
+    product = result.scalar_one_or_none()
+    if product is None:
+        raise api_error(404, ErrorCode.PRODUCT_REQUEST_PRODUCT_NOT_FOUND, "Product not found")
+    return product
+
+
+async def _ensure_active_variant(session: AsyncSession, product_id: int, variant_id: int | None) -> ProductVariant:
+    if variant_id is None:
+        raise api_error(422, ErrorCode.PRODUCT_REQUEST_VARIANT_REQUIRED, "Variant is required")
+    result = await session.execute(
+        select(ProductVariant)
+        .join(Product, Product.id == ProductVariant.product_id)
+        .where(ProductVariant.id == variant_id, ProductVariant.product_id == product_id, Product.is_active == True)
+    )
+    variant = result.scalar_one_or_none()
+    if variant is None:
+        raise api_error(404, ErrorCode.PRODUCT_REQUEST_VARIANT_NOT_FOUND, "Variant not found")
+    return variant
+
+
+def _clean_variant_name(value: str | None) -> str:
+    cleaned = (value or "").strip()
+    if not cleaned:
+        raise api_error(422, ErrorCode.PRODUCT_REQUEST_VARIANT_NAME_REQUIRED, "Variant name is required")
+    return cleaned
+
+
+async def _ensure_point_manager_can_create(actor, session: AsyncSession, location_id: int) -> None:
+    member = await _active_staff_for_actor(actor, session)
+    if member is None or member.role != ROLE_POINT_MANAGER:
+        raise api_error(403, ErrorCode.PRODUCT_REQUEST_PERMISSION_DENIED, "Point manager access required")
+    if location_id not in _staff_location_ids(member):
+        raise api_error(403, ErrorCode.PRODUCT_REQUEST_LOCATION_FORBIDDEN, "Local Point is not assigned")
+
+
+async def _ensure_reviewer_can_review(actor, session: AsyncSession, city_id: int) -> None:
+    if await is_project_admin_user(actor, session):
+        return
+    member = await _active_staff_for_actor(actor, session)
+    if member and member.role == ROLE_CITY_CURATOR and city_id in _staff_city_ids(member):
+        return
+    raise api_error(403, ErrorCode.PRODUCT_REQUEST_REVIEW_PERMISSION_DENIED, "Review access denied")
+
+
+@router.get("/product-requests", response_model=list[ProductRequestSchema])
+async def admin_list_product_requests(
+    actor=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    q = (
+        select(ProductRequest)
+        .options(
+            selectinload(ProductRequest.city),
+            selectinload(ProductRequest.location),
+            selectinload(ProductRequest.product),
+            selectinload(ProductRequest.variant),
+        )
+        .order_by(ProductRequest.created_at.desc(), ProductRequest.id.desc())
+    )
+    if not await is_project_admin_user(actor, session):
+        member = await _active_staff_for_actor(actor, session)
+        if member is None:
+            raise api_error(403, ErrorCode.PRODUCT_REQUEST_PERMISSION_DENIED, "Product request access denied")
+        if member.role == ROLE_CITY_CURATOR:
+            q = q.where(ProductRequest.city_id.in_(_staff_city_ids(member) or {-1}))
+        elif member.role == ROLE_POINT_MANAGER:
+            q = q.where(ProductRequest.location_id.in_(_staff_location_ids(member) or {-1}))
+        else:
+            raise api_error(403, ErrorCode.PRODUCT_REQUEST_PERMISSION_DENIED, "Product request access denied")
+    result = await session.execute(q)
+    return [_product_request_schema(request) for request in result.scalars().all()]
+
+
+@router.get("/product-requests/options", response_model=ProductRequestOptions)
+async def admin_get_product_request_options(
+    actor=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    location_q = (
+        select(Location, City)
+        .join(City, City.id == Location.city_id)
+        .where(Location.is_active == True, City.is_active == True)
+        .order_by(City.name, Location.name)
+    )
+    if not await is_project_admin_user(actor, session):
+        member = await _active_staff_for_actor(actor, session)
+        if member is None:
+            raise api_error(403, ErrorCode.PRODUCT_REQUEST_PERMISSION_DENIED, "Product request access denied")
+        if member.role == ROLE_CITY_CURATOR:
+            location_q = location_q.where(Location.city_id.in_(_staff_city_ids(member) or {-1}))
+        elif member.role == ROLE_POINT_MANAGER:
+            location_q = location_q.where(Location.id.in_(_staff_location_ids(member) or {-1}))
+        else:
+            raise api_error(403, ErrorCode.PRODUCT_REQUEST_PERMISSION_DENIED, "Product request access denied")
+
+    location_result = await session.execute(location_q)
+    locations = [
+        ProductRequestLocationOption(id=location.id, city_id=city.id, city_name=city.name, name=location.name)
+        for location, city in location_result.all()
+    ]
+    product_result = await session.execute(
+        select(Product)
+        .options(selectinload(Product.variants))
+        .where(Product.is_active == True)
+        .order_by(Product.name_ru)
+    )
+    products = [ProductSchema.model_validate(product) for product in product_result.scalars().all()]
+    return ProductRequestOptions(locations=locations, products=products)
+
+
+@router.post("/product-requests", response_model=ProductRequestSchema)
+async def admin_create_product_request(
+    body: CreateProductRequestRequest,
+    actor=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    if body.request_type not in PRODUCT_REQUEST_TYPES:
+        raise api_error(422, ErrorCode.PRODUCT_REQUEST_TYPE_INVALID, "Product request type is invalid")
+    if body.quantity <= 0:
+        raise api_error(422, ErrorCode.PRODUCT_REQUEST_QUANTITY_INVALID, "Quantity must be positive")
+    city, location = await _ensure_request_location(session, body.location_id)
+    await _ensure_point_manager_can_create(actor, session, location.id)
+    await _ensure_active_product(session, body.product_id)
+
+    if body.request_type == PRODUCT_REQUEST_ADD_STOCK:
+        await _ensure_active_variant(session, body.product_id, body.variant_id)
+        variant_name_ru = variant_name_pl = variant_name_uk = None
+    else:
+        variant_name_ru = _clean_variant_name(body.variant_name_ru)
+        variant_name_pl = _clean_variant_name(body.variant_name_pl or variant_name_ru)
+        variant_name_uk = _clean_variant_name(body.variant_name_uk or variant_name_ru)
+
+    request = ProductRequest(
+        request_type=body.request_type,
+        status=PRODUCT_REQUEST_PENDING_REVIEW,
+        requester_user_id=getattr(actor, "id", None),
+        requester_tg_id=actor.tg_id,
+        city_id=city.id,
+        location_id=location.id,
+        product_id=body.product_id,
+        variant_id=body.variant_id,
+        variant_name_ru=variant_name_ru,
+        variant_name_pl=variant_name_pl,
+        variant_name_uk=variant_name_uk,
+        price_override=body.price_override,
+        quantity=body.quantity,
+    )
+    session.add(request)
+    await session.commit()
+    return _product_request_schema(await _load_product_request(session, request.id))
+
+
+@router.post("/product-requests/{request_id}/approve", response_model=ProductRequestSchema)
+async def admin_approve_product_request(
+    request_id: int,
+    actor=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    result = await session.execute(
+        select(ProductRequest)
+        .options(
+            selectinload(ProductRequest.city),
+            selectinload(ProductRequest.location),
+            selectinload(ProductRequest.product),
+            selectinload(ProductRequest.variant),
+        )
+        .where(ProductRequest.id == request_id)
+        .with_for_update()
+    )
+    request = result.scalar_one_or_none()
+    if request is None:
+        raise api_error(404, ErrorCode.PRODUCT_REQUEST_NOT_FOUND, "Product request not found")
+    if request.status != PRODUCT_REQUEST_PENDING_REVIEW:
+        raise api_error(409, ErrorCode.PRODUCT_REQUEST_TRANSITION_INVALID, "Request is not pending review")
+    await _ensure_reviewer_can_review(actor, session, request.city_id)
+    await _ensure_request_location(session, request.location_id)
+    await _ensure_active_product(session, request.product_id)
+
+    if request.request_type == PRODUCT_REQUEST_ADD_VARIANT:
+        variant = ProductVariant(
+            product_id=request.product_id,
+            name_ru=_clean_variant_name(request.variant_name_ru),
+            name_pl=_clean_variant_name(request.variant_name_pl or request.variant_name_ru),
+            name_uk=_clean_variant_name(request.variant_name_uk or request.variant_name_ru),
+            price_override=request.price_override,
+        )
+        session.add(variant)
+        await session.flush()
+        request.published_variant_id = variant.id
+        stock_variant_id = variant.id
+    elif request.request_type == PRODUCT_REQUEST_ADD_STOCK:
+        variant = await _ensure_active_variant(session, request.product_id, request.variant_id)
+        request.published_variant_id = variant.id
+        stock_variant_id = variant.id
+    else:
+        raise api_error(422, ErrorCode.PRODUCT_REQUEST_TYPE_INVALID, "Product request type is invalid")
+
+    result = await session.execute(
+        select(LocationStock).where(
+            LocationStock.location_id == request.location_id,
+            LocationStock.variant_id == stock_variant_id,
+        )
+    )
+    stock = result.scalar_one_or_none()
+    if stock is None:
+        stock = LocationStock(location_id=request.location_id, variant_id=stock_variant_id, quantity=request.quantity)
+        session.add(stock)
+    elif request.request_type == PRODUCT_REQUEST_ADD_STOCK:
+        stock.quantity += request.quantity
+    else:
+        stock.quantity = request.quantity
+
+    request.status = PRODUCT_REQUEST_APPROVED
+    request.reviewer_tg_id = actor.tg_id
+    request.reviewed_at = datetime.now(tz=timezone.utc)
+    await session.commit()
+    return _product_request_schema(await _load_product_request(session, request.id))
+
+
+@router.post("/product-requests/{request_id}/reject", response_model=ProductRequestSchema)
+async def admin_reject_product_request(
+    request_id: int,
+    body: RejectProductRequestRequest,
+    actor=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    reason = body.reason.strip()
+    if not reason:
+        raise api_error(422, ErrorCode.VALIDATION_REQUIRED, "Reject reason is required")
+    result = await session.execute(
+        select(ProductRequest)
+        .options(
+            selectinload(ProductRequest.city),
+            selectinload(ProductRequest.location),
+            selectinload(ProductRequest.product),
+            selectinload(ProductRequest.variant),
+        )
+        .where(ProductRequest.id == request_id)
+        .with_for_update()
+    )
+    request = result.scalar_one_or_none()
+    if request is None:
+        raise api_error(404, ErrorCode.PRODUCT_REQUEST_NOT_FOUND, "Product request not found")
+    if request.status != PRODUCT_REQUEST_PENDING_REVIEW:
+        raise api_error(409, ErrorCode.PRODUCT_REQUEST_TRANSITION_INVALID, "Request is not pending review")
+    await _ensure_reviewer_can_review(actor, session, request.city_id)
+    request.status = PRODUCT_REQUEST_REJECTED
+    request.reject_reason = reason
+    request.reviewer_tg_id = actor.tg_id
+    request.reviewed_at = datetime.now(tz=timezone.utc)
+    await session.commit()
+    return _product_request_schema(await _load_product_request(session, request.id))
 
 
 @router.get("/cities", response_model=list[CitySchema])

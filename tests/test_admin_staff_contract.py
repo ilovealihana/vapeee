@@ -341,6 +341,32 @@ class AdminStaffContractTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(access.has_access)
         self.assertEqual(access.role, "project_admin")
 
+    async def test_staff_point_manager_access_is_reported_from_database(self):
+        async with self.session_maker() as session:
+            city = City(name="Wroclaw", slug="wroclaw", is_active=True)
+            session.add(city)
+            await session.flush()
+            location = Location(city_id=city.id, name="Center", address="Main 1", is_active=True)
+            session.add(location)
+            await session.flush()
+
+            member = await admin_create_staff_member(
+                CreateStaffMemberRequest(
+                    tg_id=10017,
+                    role="point_manager",
+                    city_ids=[],
+                    location_ids=[location.id],
+                ),
+                actor=self.admin_actor,
+                session=session,
+            )
+            actor = User(tg_id=member.tg_id, first_name="Point manager")
+
+            access = await admin_get_access(actor=actor, session=session)
+
+        self.assertTrue(access.has_access)
+        self.assertEqual(access.role, "point_manager")
+
     async def test_active_duplicate_tg_id_is_rejected(self):
         async with self.session_maker() as session:
             await admin_create_staff_member(

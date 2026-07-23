@@ -105,6 +105,58 @@ export interface AdminAccess {
   role?: AdminStaffRole;
 }
 
+export type ProductRequestType = 'ADD_VARIANT' | 'ADD_STOCK';
+export type ProductRequestStatus = 'pending_review' | 'approved' | 'rejected';
+
+export interface AdminProductRequest {
+  id: number;
+  request_type: ProductRequestType;
+  status: ProductRequestStatus;
+  requester_tg_id: number;
+  city_id: number;
+  city_name?: string;
+  location_id: number;
+  location_name?: string;
+  product_id: number;
+  product_name?: string;
+  variant_id?: number;
+  variant_name?: string;
+  variant_name_ru?: string;
+  variant_name_pl?: string;
+  variant_name_uk?: string;
+  price_override?: string;
+  quantity: number;
+  reject_reason?: string;
+  published_variant_id?: number;
+  reviewer_tg_id?: number;
+  created_at: string;
+  reviewed_at?: string;
+}
+
+export interface ProductRequestLocationOption {
+  id: number;
+  city_id: number;
+  city_name: string;
+  name: string;
+}
+
+export interface ProductRequestOptions {
+  locations: ProductRequestLocationOption[];
+  products: AdminProduct[];
+}
+
+export interface ProductRequestPayload {
+  request_type: ProductRequestType;
+  location_id: number;
+  product_id: number;
+  variant_id?: number;
+  variant_name_ru?: string;
+  variant_name_pl?: string;
+  variant_name_uk?: string;
+  price_override?: string;
+  quantity: number;
+}
+
 // ── API ────────────────────────────────────────────────────
 
 export const adminApi = {
@@ -170,4 +222,17 @@ export const adminApi = {
     req<void>(`/api/admin/staff/${id}`, { method: 'DELETE' }),
   hardDeleteStaff: (id: number) =>
     req<void>(`/api/admin/staff/${id}/hard-delete`, { method: 'DELETE' }),
+
+  // Product requests
+  getProductRequests: () => req<AdminProductRequest[]>('/api/admin/product-requests'),
+  getProductRequestOptions: () => req<ProductRequestOptions>('/api/admin/product-requests/options'),
+  createProductRequest: (data: ProductRequestPayload) =>
+    req<AdminProductRequest>('/api/admin/product-requests', { method: 'POST', body: JSON.stringify(data) }),
+  approveProductRequest: (id: number) =>
+    req<AdminProductRequest>(`/api/admin/product-requests/${id}/approve`, { method: 'POST' }),
+  rejectProductRequest: (id: number, reason: string) =>
+    req<AdminProductRequest>(`/api/admin/product-requests/${id}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    }),
 };

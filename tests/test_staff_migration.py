@@ -24,8 +24,12 @@ class StaffMigrationTest(unittest.TestCase):
             inspector = inspect(engine)
             self.assertIn("staff_members", inspector.get_table_names())
             self.assertIn("staff_assignments", inspector.get_table_names())
+            self.assertIn("product_requests", inspector.get_table_names())
             staff_columns = {column["name"] for column in inspector.get_columns("staff_members")}
             self.assertIn("username", staff_columns)
+            request_columns = {column["name"] for column in inspector.get_columns("product_requests")}
+            self.assertIn("request_type", request_columns)
+            self.assertIn("published_variant_id", request_columns)
 
             with engine.begin() as conn:
                 conn.execute(text("PRAGMA foreign_keys=ON"))
@@ -46,6 +50,7 @@ class StaffMigrationTest(unittest.TestCase):
             inspector = inspect(engine)
             self.assertNotIn("staff_members", inspector.get_table_names())
             self.assertNotIn("staff_assignments", inspector.get_table_names())
+            self.assertNotIn("product_requests", inspector.get_table_names())
         finally:
             if engine is not None:
                 engine.dispose()

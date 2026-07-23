@@ -276,13 +276,13 @@ class CreateVariantRequest(BaseModel):
     name_ru: str
     name_pl: str
     name_uk: str
-    price_override: Optional[Decimal] = None
+    price_override: Optional[Decimal] = Field(default=None, ge=0)
 
 class UpdateVariantRequest(BaseModel):
     name_ru: Optional[str] = None
     name_pl: Optional[str] = None
     name_uk: Optional[str] = None
-    price_override: Optional[Decimal] = None
+    price_override: Optional[Decimal] = Field(default=None, ge=0)
 
 class StockItem(BaseModel):
     location_id: int
@@ -300,6 +300,58 @@ class StockRow(BaseModel):
     variant_name: str
     product_name: str
     quantity: int
+
+class CreateProductRequestRequest(BaseModel):
+    request_type: str
+    location_id: int
+    product_id: int
+    variant_id: Optional[int] = None
+    variant_name_ru: Optional[str] = None
+    variant_name_pl: Optional[str] = None
+    variant_name_uk: Optional[str] = None
+    price_override: Optional[Decimal] = Field(default=None, ge=0)
+    quantity: int = Field(ge=1)
+
+class RejectProductRequestRequest(BaseModel):
+    reason: str
+
+class ProductRequestSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    request_type: str
+    status: str
+    requester_user_id: Optional[int]
+    requester_tg_id: int
+    city_id: int
+    city_name: Optional[str] = None
+    location_id: int
+    location_name: Optional[str] = None
+    product_id: int
+    product_name: Optional[str] = None
+    variant_id: Optional[int] = None
+    variant_name: Optional[str] = None
+    variant_name_ru: Optional[str] = None
+    variant_name_pl: Optional[str] = None
+    variant_name_uk: Optional[str] = None
+    price_override: Optional[Decimal] = None
+    quantity: int
+    reject_reason: Optional[str] = None
+    published_variant_id: Optional[int] = None
+    reviewer_tg_id: Optional[int] = None
+    created_at: datetime
+    updated_at: datetime
+    reviewed_at: Optional[datetime] = None
+
+class ProductRequestLocationOption(BaseModel):
+    id: int
+    city_id: int
+    city_name: str
+    name: str
+
+class ProductRequestOptions(BaseModel):
+    locations: List[ProductRequestLocationOption]
+    products: List[ProductSchema]
 
 class UpdateOrderStatusRequest(BaseModel):
     status: str

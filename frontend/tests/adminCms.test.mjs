@@ -15,6 +15,7 @@ const productsSource = readFileSync(new URL('pages/admin/AdminProducts.tsx', roo
 const stockSource = readFileSync(new URL('pages/admin/AdminStock.tsx', root), 'utf8');
 const ordersSource = readFileSync(new URL('pages/admin/AdminOrders.tsx', root), 'utf8');
 const staffSource = readFileSync(new URL('pages/admin/AdminStaff.tsx', root), 'utf8');
+const productRequestsSource = readFileSync(new URL('pages/admin/AdminProductRequests.tsx', root), 'utf8');
 const uiSource = readFileSync(new URL('pages/admin/AdminUI.tsx', root), 'utf8');
 const checkoutSource = readFileSync(new URL('pages/Checkout.tsx', root), 'utf8');
 const apiClientSource = readFileSync(new URL('api/client.ts', root), 'utf8');
@@ -43,6 +44,41 @@ test('admin layout is a separate CMS shell with readable navigation labels', () 
   assert.match(layoutSource, /t\('admin\.layout\.noAccessTitle'\)/);
   assert.match(layoutSource, /adminApi\.getAccess/);
   assert.doesNotMatch(layoutSource, /VITE_ADMIN_IDS/);
+});
+
+test('admin product requests page is routed and uses cms/i18n patterns', () => {
+  assert.match(layoutSource, /labelKey: 'admin\.layout\.tabs\.productRequests'/);
+  assert.match(layoutSource, /adminRole === 'project_admin'/);
+  assert.match(layoutSource, /tab\.roles\.includes\(adminRole as any\)/);
+  assert.match(appSource, /import AdminProductRequests from '\.\/pages\/admin\/AdminProductRequests'/);
+  assert.match(appSource, /path="product-requests" element=\{<AdminProductRequests \/>\}/);
+  assert.match(adminApiSource, /export type ProductRequestType = 'ADD_VARIANT' \| 'ADD_STOCK'/);
+  assert.match(adminApiSource, /getProductRequests: \(\) => req<AdminProductRequest\[\]>\('\/api\/admin\/product-requests'\)/);
+  assert.match(adminApiSource, /createProductRequest:/);
+  assert.match(adminApiSource, /approveProductRequest:/);
+  assert.match(adminApiSource, /rejectProductRequest:/);
+  assert.match(productRequestsSource, /AdminPageHeader/);
+  assert.match(productRequestsSource, /AdminModal/);
+  assert.match(productRequestsSource, /AdminStatusBadge/);
+  assert.match(productRequestsSource, /useI18n\(activeLocale\)/);
+  assert.match(productRequestsSource, /t\('admin\.productRequests\.title'\)/);
+  assert.match(productRequestsSource, /adminApi\.createProductRequest/);
+  assert.match(productRequestsSource, /adminApi\.approveProductRequest/);
+  assert.match(productRequestsSource, /adminApi\.rejectProductRequest/);
+  assert.match(productRequestsSource, /rejectReason\.trim\(\)/);
+  assert.match(productRequestsSource, /adminApi\.getAccess/);
+  assert.match(productRequestsSource, /const canCreate = adminRole === 'point_manager'/);
+  assert.match(productRequestsSource, /const canReview = adminRole === 'project_admin' \|\| adminRole === 'city_curator'/);
+  assert.match(productRequestsSource, /\{canCreate && \(/);
+  assert.match(productRequestsSource, /\{canReview && request\.status === 'pending_review' && \(/);
+});
+
+test('admin layout guards direct child routes by role', () => {
+  assert.match(layoutSource, /useLocation/);
+  assert.match(layoutSource, /const allowedTabs = tabs\.filter/);
+  assert.match(layoutSource, /allowedTabs\.some\(\(tab\) => tab\.path === location\.pathname\)/);
+  assert.match(layoutSource, /navigate\('\/admin\/product-requests', \{ replace: true \}\)/);
+  assert.doesNotMatch(layoutSource, /adminRole \|\| 'Admin'/);
 });
 
 test('admin shared UI defaults use i18n keys', () => {
