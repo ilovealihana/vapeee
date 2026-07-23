@@ -2064,7 +2064,29 @@ textarea.input {
 }
 
 .admin-request-row {
-  grid-template-columns: minmax(180px, 1.5fr) minmax(120px, 1fr) minmax(80px, 0.6fr) auto auto;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+}
+
+.admin-request-meta {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-request-meta > span {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  color: var(--secondary);
+  font-size: 12px;
+}
+
+.admin-request-actions {
+  grid-column: 1;
+  justify-content: flex-start;
 }
 
 .admin-cms-titlebar h1 {

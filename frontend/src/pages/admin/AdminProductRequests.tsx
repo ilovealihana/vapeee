@@ -230,11 +230,13 @@ export default function AdminProductRequests() {
                 <strong>{request.product_name || t('admin.productRequests.productFallback')}</strong>
                 <span>{requestTypeLabel(request.request_type)} - {request.location_name || t('admin.productRequests.locationFallback')}</span>
               </span>
-              <span>{request.variant_name || request.variant_name_ru || t('admin.productRequests.variantFallback')}</span>
-              <span>{t('admin.productRequests.quantity').replace('{count}', String(request.quantity))}</span>
-              <AdminStatusBadge status={request.status} label={statusLabel(request.status)} />
+              <div className="admin-request-meta">
+                <span>{request.variant_name || request.variant_name_ru || t('admin.productRequests.variantFallback')}</span>
+                <span>{t('admin.productRequests.quantity').replace('{count}', String(request.quantity))}</span>
+                <AdminStatusBadge status={request.status} label={statusLabel(request.status)} />
+              </div>
               {canReview && request.status === 'pending_review' && (
-                <div className="admin-row-actions">
+                <div className="admin-request-actions admin-row-actions">
                   <button className="admin-icon-button" type="button" onClick={() => approve(request)} aria-label={t('admin.productRequests.approveAria')}>
                     <Icon name="check" size={16} />
                   </button>

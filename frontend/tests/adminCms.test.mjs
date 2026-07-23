@@ -231,6 +231,14 @@ test('admin css defines dense cms composition without user product-card reuse', 
   assert.doesNotMatch(css, /\.admin-cms-table[\s\S]{0,500}product-card/);
 });
 
+test('admin product request rows stay readable on narrow mobile screens', () => {
+  assert.match(css, /\.admin-request-row\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\);/);
+  assert.match(css, /\.admin-request-meta\s*\{[\s\S]*display:\s*flex;[\s\S]*flex-wrap:\s*wrap;/);
+  assert.match(css, /\.admin-request-actions\s*\{[\s\S]*grid-column:\s*1;[\s\S]*justify-content:\s*flex-start;/);
+  assert.match(productRequestsSource, /className="admin-request-meta"/);
+  assert.match(productRequestsSource, /className="admin-request-actions admin-row-actions"/);
+});
+
 test('admin stock inputs force readable dark colors in Telegram webview', () => {
   assert.match(css, /button,\s*input,\s*textarea,\s*select\s*\{[\s\S]*color-scheme:\s*dark;/);
   assert.match(css, /input\.input,\s*textarea\.input,\s*select\.input,\s*\.select\s*\{[\s\S]*background-color:\s*var\(--surface\)\s*!important;/);
