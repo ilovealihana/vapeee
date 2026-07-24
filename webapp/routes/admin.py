@@ -45,6 +45,7 @@ from webapp.deps import (
     is_project_admin_user,
 )
 from webapp.errors import ErrorCode, api_error
+from webapp.services import product_request_events
 from webapp.schemas import (
     CitySchema, LocationSchema,
     ProductSchema, VariantSchema,
@@ -462,8 +463,11 @@ def _product_request_schema(request: ProductRequest) -> ProductRequestSchema:
         price_override=request.price_override,
         quantity=request.quantity,
         reject_reason=request.reject_reason,
+        review_comment=request.review_comment,
         published_variant_id=request.published_variant_id,
         reviewer_tg_id=request.reviewer_tg_id,
+        locked_by_tg_id=request.locked_by_tg_id,
+        locked_at=request.locked_at,
         created_at=request.created_at,
         updated_at=request.updated_at,
         reviewed_at=request.reviewed_at,
@@ -632,6 +636,20 @@ async def admin_create_product_request(
         quantity=body.quantity,
     )
     session.add(request)
+    await session.flush()
+    event_type = product_request_events.PRODUCT_REQUEST_CREATED
+    product_request_events.emit_product_request_event(
+        event_type,
+        product_request_events.ProductRequestEventContext(
+            request_id=request.id,
+            event_type=event_type,
+            actor_tg_id=actor.tg_id,
+            requester_tg_id=request.requester_tg_id,
+            city_id=request.city_id,
+            location_id=request.location_id,
+            current_status=request.status,
+        ),
+    )
     await session.commit()
     return _product_request_schema(await _load_product_request(session, request.id))
 
