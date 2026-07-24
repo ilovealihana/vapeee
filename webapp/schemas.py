@@ -315,6 +315,20 @@ class CreateProductRequestRequest(BaseModel):
 class RejectProductRequestRequest(BaseModel):
     reason: str
 
+
+class ProductRequestCommentRequest(BaseModel):
+    comment: str
+
+
+class UpdateProductRequestReviewRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    variant_name_ru: Optional[str] = None
+    variant_name_pl: Optional[str] = None
+    variant_name_uk: Optional[str] = None
+    price_override: Optional[Decimal] = Field(default=None, ge=0)
+    quantity: Optional[int] = Field(default=None, ge=1)
+
 class ProductRequestSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -337,8 +351,11 @@ class ProductRequestSchema(BaseModel):
     price_override: Optional[Decimal] = None
     quantity: int
     reject_reason: Optional[str] = None
+    review_comment: Optional[str] = None
     published_variant_id: Optional[int] = None
     reviewer_tg_id: Optional[int] = None
+    locked_by_tg_id: Optional[int] = None
+    locked_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
     reviewed_at: Optional[datetime] = None

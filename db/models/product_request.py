@@ -14,10 +14,20 @@ PRODUCT_REQUEST_ADD_STOCK = "ADD_STOCK"
 PRODUCT_REQUEST_TYPES = {PRODUCT_REQUEST_ADD_VARIANT, PRODUCT_REQUEST_ADD_STOCK}
 
 PRODUCT_REQUEST_PENDING_REVIEW = "pending_review"
+PRODUCT_REQUEST_NEED_CHANGES = "need_changes"
 PRODUCT_REQUEST_APPROVED = "approved"
 PRODUCT_REQUEST_REJECTED = "rejected"
 PRODUCT_REQUEST_STATUSES = {
     PRODUCT_REQUEST_PENDING_REVIEW,
+    PRODUCT_REQUEST_NEED_CHANGES,
+    PRODUCT_REQUEST_APPROVED,
+    PRODUCT_REQUEST_REJECTED,
+}
+PRODUCT_REQUEST_ACTIVE_STATUSES = {
+    PRODUCT_REQUEST_PENDING_REVIEW,
+    PRODUCT_REQUEST_NEED_CHANGES,
+}
+PRODUCT_REQUEST_FINAL_STATUSES = {
     PRODUCT_REQUEST_APPROVED,
     PRODUCT_REQUEST_REJECTED,
 }
@@ -31,7 +41,7 @@ class ProductRequest(Base):
             name="ck_product_requests_type",
         ),
         CheckConstraint(
-            "status IN ('pending_review', 'approved', 'rejected')",
+            "status IN ('pending_review', 'need_changes', 'approved', 'rejected')",
             name="ck_product_requests_status",
         ),
         CheckConstraint("quantity > 0", name="ck_product_requests_positive_quantity"),
@@ -66,10 +76,13 @@ class ProductRequest(Base):
     price_override: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
     reject_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    review_comment: Mapped[str | None] = mapped_column(Text, nullable=True)
     published_variant_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("product_variants.id", ondelete="SET NULL"), nullable=True, index=True
     )
     reviewer_tg_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, index=True)
+    locked_by_tg_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, index=True)
+    locked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
