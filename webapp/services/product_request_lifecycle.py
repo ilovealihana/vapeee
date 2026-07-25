@@ -21,8 +21,10 @@ from db.models.product_request import (
 )
 from db.models.product_variant import ProductVariant
 from db.models.staff import ROLE_CITY_CURATOR, StaffMember
+from db.models.staff import ROLE_POINT_MANAGER
 from webapp.deps import is_project_admin_user
 from webapp.errors import ErrorCode, api_error
+from webapp.schemas import UpdateProductRequestReviewRequest
 from webapp.services import product_request_events
 
 
@@ -43,6 +45,12 @@ def _staff_city_ids(member: StaffMember | None) -> set[int]:
     return {assignment.city_id for assignment in member.assignments if assignment.city_id is not None}
 
 
+def _staff_location_ids(member: StaffMember | None) -> set[int]:
+    if member is None:
+        return set()
+    return {assignment.location_id for assignment in member.assignments if assignment.location_id is not None}
+
+
 async def _ensure_reviewer_can_review(actor, session: AsyncSession, city_id: int) -> None:
     if await is_project_admin_user(actor, session):
         return
@@ -50,6 +58,22 @@ async def _ensure_reviewer_can_review(actor, session: AsyncSession, city_id: int
     if member and member.role == ROLE_CITY_CURATOR and city_id in _staff_city_ids(member):
         return
     raise api_error(403, ErrorCode.PRODUCT_REQUEST_REVIEW_PERMISSION_DENIED, "Review access denied")
+
+
+async def _ensure_actor_can_edit_request(actor, session: AsyncSession, request: ProductRequest) -> None:
+    if await is_project_admin_user(actor, session):
+        return
+    member = await _active_staff_for_actor(actor, session)
+    if member and member.role == ROLE_CITY_CURATOR and request.city_id in _staff_city_ids(member):
+        return
+    if (
+        member
+        and member.role == ROLE_POINT_MANAGER
+        and request.requester_tg_id == getattr(actor, "tg_id", None)
+        and request.location_id in _staff_location_ids(member)
+    ):
+        return
+    raise api_error(403, ErrorCode.PRODUCT_REQUEST_PERMISSION_DENIED, "Product request edit access denied")
 
 
 async def _load_product_request_for_update(session: AsyncSession, request_id: int) -> ProductRequest:
@@ -307,6 +331,49 @@ async def request_product_request_changes(
     product_request_events.emit_product_request_event(
         event_type,
         _event_context(request, event_type, actor.tg_id, cleaned_comment),
+    )
+    await session.commit()
+    return request
+
+
+async def edit_product_request(
+    request_id: int,
+    body: UpdateProductRequestReviewRequest,
+    *,
+    actor,
+    session: AsyncSession,
+) -> ProductRequest:
+    request = await _load_product_request_for_update(session, request_id)
+    if request.status != PRODUCT_REQUEST_NEED_CHANGES:
+        raise api_error(409, ErrorCode.PRODUCT_REQUEST_TRANSITION_INVALID, "Request is not editable")
+    if request.locked_by_tg_id is not None:
+        raise api_error(409, ErrorCode.PRODUCT_REQUEST_EDIT_LOCKED, "Product request is locked")
+    await _ensure_actor_can_edit_request(actor, session, request)
+
+    if body.quantity is not None:
+        request.quantity = body.quantity
+
+    if request.request_type == PRODUCT_REQUEST_ADD_VARIANT:
+        if "variant_name_ru" in body.model_fields_set:
+            request.variant_name_ru = _clean_variant_name(body.variant_name_ru)
+        if "variant_name_pl" in body.model_fields_set:
+            request.variant_name_pl = _clean_variant_name(body.variant_name_pl)
+        if "variant_name_uk" in body.model_fields_set:
+            request.variant_name_uk = _clean_variant_name(body.variant_name_uk)
+        if "price_override" in body.model_fields_set:
+            request.price_override = body.price_override
+    elif request.request_type == PRODUCT_REQUEST_ADD_STOCK:
+        pass
+    else:
+        raise api_error(422, ErrorCode.PRODUCT_REQUEST_TYPE_INVALID, "Product request type is invalid")
+
+    request.status = PRODUCT_REQUEST_PENDING_REVIEW
+    _clear_lock(request)
+    await session.flush()
+    event_type = product_request_events.PRODUCT_REQUEST_UPDATED
+    product_request_events.emit_product_request_event(
+        event_type,
+        _event_context(request, event_type, actor.tg_id),
     )
     await session.commit()
     return request

@@ -12,6 +12,7 @@ from db.models.city import City
 from db.models.location import Location
 from db.models.location_stock import LocationStock
 from db.models.product import Product
+from db.models.product_request import ProductRequest
 from db.models.product_variant import ProductVariant
 from db.models.user import User
 from db.session import Base
@@ -20,6 +21,7 @@ from webapp.routes.admin import (
     admin_approve_product_request,
     admin_create_product_request,
     admin_create_staff_member,
+    admin_edit_product_request,
     admin_request_product_request_changes,
     admin_reject_product_request,
 )
@@ -27,6 +29,7 @@ from webapp.schemas import (
     CreateProductRequestRequest,
     CreateStaffMemberRequest,
     RejectProductRequestRequest,
+    UpdateProductRequestReviewRequest,
 )
 
 
@@ -117,6 +120,17 @@ class ProductRequestsContractTest(unittest.IsolatedAsyncioTestCase):
             variant_name_uk="Blueberry",
             price_override=Decimal("21.50"),
             quantity=quantity,
+        )
+
+    async def _move_request_to_need_changes(self, session, request_id: int, curator: User, comment="Fix request"):
+        from webapp.services.product_request_lifecycle import lock_product_request
+
+        await lock_product_request(request_id, actor=curator, session=session)
+        return await admin_request_product_request_changes(
+            request_id,
+            RejectProductRequestRequest(comment=comment),
+            actor=curator,
+            session=session,
         )
 
     async def test_point_manager_creates_add_variant_request_for_own_location(self):
@@ -939,6 +953,364 @@ class ProductRequestsContractTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(raised.exception.status_code, 409)
         self.assertEqual(raised.exception.code, ErrorCode.PRODUCT_REQUEST_TRANSITION_INVALID)
+
+    async def test_original_point_manager_can_edit_own_need_changes_request(self):
+        from webapp.services.product_request_lifecycle import edit_product_request
+
+        async with self.session_maker() as session:
+            city, location = await self._city_location(session)
+            product = await self._product(session)
+            manager = await self._user(session, 13001, "Manager")
+            curator = await self._user(session, 13002, "Curator")
+            await self._point_manager(session, manager, location)
+            await self._city_curator(session, curator, city)
+            request = await admin_create_product_request(
+                self._add_variant_body(location, product),
+                actor=manager,
+                session=session,
+            )
+            await self._move_request_to_need_changes(session, request.id, curator, "Fix names")
+
+            edited = await edit_product_request(
+                request.id,
+                UpdateProductRequestReviewRequest(variant_name_ru="Mint", quantity=8),
+                actor=manager,
+                session=session,
+            )
+
+        self.assertEqual(edited.status, "pending_review")
+        self.assertEqual(edited.variant_name_ru, "Mint")
+        self.assertEqual(edited.quantity, 8)
+        self.assertEqual(edited.review_comment, "Fix names")
+        self.assertIsNone(edited.locked_by_tg_id)
+
+    async def test_patch_route_delegates_need_changes_edit(self):
+        async with self.session_maker() as session:
+            city, location = await self._city_location(session)
+            product = await self._product(session)
+            manager = await self._user(session, 13020, "Manager")
+            curator = await self._user(session, 13021, "Curator")
+            await self._point_manager(session, manager, location)
+            await self._city_curator(session, curator, city)
+            request = await admin_create_product_request(
+                self._add_variant_body(location, product),
+                actor=manager,
+                session=session,
+            )
+            await self._move_request_to_need_changes(session, request.id, curator)
+
+            edited = await admin_edit_product_request(
+                request.id,
+                UpdateProductRequestReviewRequest(quantity=6),
+                actor=manager,
+                session=session,
+            )
+
+        self.assertEqual(edited.status, "pending_review")
+        self.assertEqual(edited.quantity, 6)
+
+    async def test_city_curator_can_edit_need_changes_request_in_assigned_city(self):
+        from webapp.services.product_request_lifecycle import edit_product_request
+
+        async with self.session_maker() as session:
+            city, location = await self._city_location(session)
+            product = await self._product(session)
+            manager = await self._user(session, 13003, "Manager")
+            curator = await self._user(session, 13004, "Curator")
+            await self._point_manager(session, manager, location)
+            await self._city_curator(session, curator, city)
+            request = await admin_create_product_request(
+                self._add_variant_body(location, product),
+                actor=manager,
+                session=session,
+            )
+            await self._move_request_to_need_changes(session, request.id, curator)
+
+            edited = await edit_product_request(
+                request.id,
+                UpdateProductRequestReviewRequest(quantity=5),
+                actor=curator,
+                session=session,
+            )
+
+        self.assertEqual(edited.status, "pending_review")
+        self.assertEqual(edited.quantity, 5)
+
+    async def test_project_admin_can_edit_need_changes_request(self):
+        from webapp.services.product_request_lifecycle import edit_product_request
+
+        async with self.session_maker() as session:
+            city, location = await self._city_location(session)
+            product = await self._product(session)
+            manager = await self._user(session, 13005, "Manager")
+            curator = await self._user(session, 13006, "Curator")
+            await self._point_manager(session, manager, location)
+            await self._city_curator(session, curator, city)
+            request = await admin_create_product_request(
+                self._add_variant_body(location, product),
+                actor=manager,
+                session=session,
+            )
+            await self._move_request_to_need_changes(session, request.id, curator)
+
+            edited = await edit_product_request(
+                request.id,
+                UpdateProductRequestReviewRequest(quantity=9),
+                actor=self.admin_actor,
+                session=session,
+            )
+
+        self.assertEqual(edited.status, "pending_review")
+        self.assertEqual(edited.quantity, 9)
+
+    async def test_another_point_manager_cannot_edit_need_changes_request(self):
+        from webapp.services.product_request_lifecycle import edit_product_request
+
+        async with self.session_maker() as session:
+            city, location = await self._city_location(session)
+            _, other_location = await self._city_location(session, "Warsaw")
+            product = await self._product(session)
+            manager = await self._user(session, 13007, "Manager")
+            other_manager = await self._user(session, 13008, "Other")
+            curator = await self._user(session, 13009, "Curator")
+            await self._point_manager(session, manager, location)
+            await self._point_manager(session, other_manager, other_location)
+            await self._city_curator(session, curator, city)
+            request = await admin_create_product_request(
+                self._add_variant_body(location, product),
+                actor=manager,
+                session=session,
+            )
+            await self._move_request_to_need_changes(session, request.id, curator)
+
+            with self.assertRaises(ApiError) as raised:
+                await edit_product_request(
+                    request.id,
+                    UpdateProductRequestReviewRequest(quantity=2),
+                    actor=other_manager,
+                    session=session,
+                )
+
+        self.assertEqual(raised.exception.status_code, 403)
+        self.assertEqual(raised.exception.code, ErrorCode.PRODUCT_REQUEST_PERMISSION_DENIED)
+
+    async def test_edit_is_blocked_when_need_changes_request_is_locked(self):
+        from webapp.services.product_request_lifecycle import edit_product_request
+
+        async with self.session_maker() as session:
+            city, location = await self._city_location(session)
+            product = await self._product(session)
+            manager = await self._user(session, 13010, "Manager")
+            curator = await self._user(session, 13011, "Curator")
+            await self._point_manager(session, manager, location)
+            await self._city_curator(session, curator, city)
+            request = await admin_create_product_request(
+                self._add_variant_body(location, product),
+                actor=manager,
+                session=session,
+            )
+            await self._move_request_to_need_changes(session, request.id, curator)
+            db_request = await session.get(ProductRequest, request.id)
+            db_request.locked_by_tg_id = curator.tg_id
+            await session.commit()
+
+            with self.assertRaises(ApiError) as raised:
+                await edit_product_request(
+                    request.id,
+                    UpdateProductRequestReviewRequest(quantity=2),
+                    actor=manager,
+                    session=session,
+                )
+
+        self.assertEqual(raised.exception.status_code, 409)
+        self.assertEqual(raised.exception.code, ErrorCode.PRODUCT_REQUEST_EDIT_LOCKED)
+
+    async def test_edit_add_stock_changes_only_quantity(self):
+        from webapp.services.product_request_lifecycle import edit_product_request
+
+        async with self.session_maker() as session:
+            city, location = await self._city_location(session)
+            product = await self._product(session)
+            variant = await self._variant(session, product)
+            manager = await self._user(session, 13012, "Manager")
+            curator = await self._user(session, 13013, "Curator")
+            await self._point_manager(session, manager, location)
+            await self._city_curator(session, curator, city)
+            request = await admin_create_product_request(
+                CreateProductRequestRequest(
+                    request_type="ADD_STOCK",
+                    location_id=location.id,
+                    product_id=product.id,
+                    variant_id=variant.id,
+                    quantity=3,
+                ),
+                actor=manager,
+                session=session,
+            )
+            await self._move_request_to_need_changes(session, request.id, curator)
+
+            edited = await edit_product_request(
+                request.id,
+                UpdateProductRequestReviewRequest(variant_name_ru="Ignored", price_override=Decimal("1.00"), quantity=7),
+                actor=manager,
+                session=session,
+            )
+
+        self.assertEqual(edited.status, "pending_review")
+        self.assertEqual(edited.quantity, 7)
+        self.assertIsNone(edited.variant_name_ru)
+        self.assertIsNone(edited.price_override)
+
+    def test_update_product_request_review_rejects_forbidden_fields(self):
+        for field_name, value in {
+            "product_id": 1,
+            "location_id": 1,
+            "request_type": "ADD_STOCK",
+            "variant_id": 1,
+        }.items():
+            with self.subTest(field_name=field_name):
+                with self.assertRaises(ValidationError):
+                    UpdateProductRequestReviewRequest(**{field_name: value})
+
+    async def test_edit_add_variant_rejects_explicit_null_variant_names(self):
+        from webapp.services.product_request_lifecycle import edit_product_request
+
+        for index, field_name in enumerate(("variant_name_ru", "variant_name_pl", "variant_name_uk"), start=1):
+            async with self.session_maker() as session:
+                city, location = await self._city_location(session, f"NullName{index}")
+                product = await self._product(session)
+                manager = await self._user(session, 13020 + index * 2, "Manager")
+                curator = await self._user(session, 13021 + index * 2, "Curator")
+                await self._point_manager(session, manager, location)
+                await self._city_curator(session, curator, city)
+                request = await admin_create_product_request(
+                    self._add_variant_body(location, product),
+                    actor=manager,
+                    session=session,
+                )
+                await self._move_request_to_need_changes(session, request.id, curator)
+
+                with self.assertRaises(ApiError) as raised:
+                    await edit_product_request(
+                        request.id,
+                        UpdateProductRequestReviewRequest(**{field_name: None}),
+                        actor=manager,
+                        session=session,
+                    )
+
+            self.assertEqual(raised.exception.status_code, 422)
+            self.assertEqual(raised.exception.code, ErrorCode.PRODUCT_REQUEST_VARIANT_NAME_REQUIRED)
+
+    async def test_edit_price_override_null_clears_override_and_omitted_preserves(self):
+        from webapp.services.product_request_lifecycle import edit_product_request
+
+        async with self.session_maker() as session:
+            city, location = await self._city_location(session)
+            product = await self._product(session)
+            manager = await self._user(session, 13014, "Manager")
+            curator = await self._user(session, 13015, "Curator")
+            await self._point_manager(session, manager, location)
+            await self._city_curator(session, curator, city)
+            request = await admin_create_product_request(
+                self._add_variant_body(location, product),
+                actor=manager,
+                session=session,
+            )
+            await self._move_request_to_need_changes(session, request.id, curator)
+            edited = await edit_product_request(
+                request.id,
+                UpdateProductRequestReviewRequest(quantity=4),
+                actor=manager,
+                session=session,
+            )
+            self.assertEqual(edited.price_override, Decimal("21.50"))
+            await self._move_request_to_need_changes(session, request.id, curator)
+
+            cleared = await edit_product_request(
+                request.id,
+                UpdateProductRequestReviewRequest(price_override=None),
+                actor=manager,
+                session=session,
+            )
+
+        self.assertIsNone(cleared.price_override)
+
+    async def test_successful_edit_emits_product_request_updated(self):
+        from webapp.services import product_request_events
+        from webapp.services.product_request_lifecycle import edit_product_request
+
+        async with self.session_maker() as session:
+            city, location = await self._city_location(session)
+            product = await self._product(session)
+            manager = await self._user(session, 13016, "Manager")
+            curator = await self._user(session, 13017, "Curator")
+            await self._point_manager(session, manager, location)
+            await self._city_curator(session, curator, city)
+            request = await admin_create_product_request(
+                self._add_variant_body(location, product),
+                actor=manager,
+                session=session,
+            )
+            await self._move_request_to_need_changes(session, request.id, curator)
+
+            with patch("webapp.services.product_request_events.emit_product_request_event") as emit:
+                await edit_product_request(
+                    request.id,
+                    UpdateProductRequestReviewRequest(quantity=4),
+                    actor=manager,
+                    session=session,
+                )
+
+        emit.assert_called_once()
+        event_type, context = emit.call_args.args
+        self.assertEqual(event_type, product_request_events.PRODUCT_REQUEST_UPDATED)
+        self.assertEqual(context.request_id, request.id)
+
+    async def test_edit_pending_or_final_request_returns_transition_invalid(self):
+        from webapp.services.product_request_lifecycle import edit_product_request, lock_product_request
+
+        async with self.session_maker() as session:
+            city, location = await self._city_location(session)
+            product = await self._product(session)
+            manager = await self._user(session, 13018, "Manager")
+            curator = await self._user(session, 13019, "Curator")
+            await self._point_manager(session, manager, location)
+            await self._city_curator(session, curator, city)
+            pending = await admin_create_product_request(
+                self._add_variant_body(location, product),
+                actor=manager,
+                session=session,
+            )
+            approved_request = await admin_create_product_request(
+                self._add_variant_body(location, product),
+                actor=manager,
+                session=session,
+            )
+            await lock_product_request(approved_request.id, actor=curator, session=session)
+            await admin_approve_product_request(approved_request.id, actor=curator, session=session)
+            rejected_request = await admin_create_product_request(
+                self._add_variant_body(location, product),
+                actor=manager,
+                session=session,
+            )
+            await lock_product_request(rejected_request.id, actor=curator, session=session)
+            await admin_reject_product_request(
+                rejected_request.id,
+                RejectProductRequestRequest(reason="No"),
+                actor=curator,
+                session=session,
+            )
+
+            for request in (pending, approved_request, rejected_request):
+                with self.assertRaises(ApiError) as raised:
+                    await edit_product_request(
+                        request.id,
+                        UpdateProductRequestReviewRequest(quantity=4),
+                        actor=manager,
+                        session=session,
+                    )
+                self.assertEqual(raised.exception.status_code, 409)
+                self.assertEqual(raised.exception.code, ErrorCode.PRODUCT_REQUEST_TRANSITION_INVALID)
 
     def test_create_product_request_rejects_negative_price_override(self):
         with self.assertRaises(ValidationError):

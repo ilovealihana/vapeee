@@ -44,6 +44,7 @@ from webapp.errors import ErrorCode, api_error
 from webapp.services import product_request_events
 from webapp.services.product_request_lifecycle import (
     approve_product_request,
+    edit_product_request,
     lock_product_request,
     reject_product_request,
     release_product_request,
@@ -61,7 +62,7 @@ from webapp.schemas import (
     CreateStaffMemberRequest, UpdateStaffMemberRequest,
     AdminAccessSchema, StaffAssignmentSchema, StaffMemberSchema,
     CreateProductRequestRequest, ProductRequestLocationOption, ProductRequestOptions,
-    ProductRequestSchema, RejectProductRequestRequest,
+    ProductRequestSchema, RejectProductRequestRequest, UpdateProductRequestReviewRequest,
 )
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -716,6 +717,17 @@ async def admin_release_product_request(
     session: AsyncSession = Depends(get_session),
 ):
     request = await release_product_request(request_id, actor=actor, session=session)
+    return _product_request_schema(await _load_product_request(session, request.id))
+
+
+@router.patch("/product-requests/{request_id}", response_model=ProductRequestSchema)
+async def admin_edit_product_request(
+    request_id: int,
+    body: UpdateProductRequestReviewRequest,
+    actor=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    request = await edit_product_request(request_id, body, actor=actor, session=session)
     return _product_request_schema(await _load_product_request(session, request.id))
 
 
