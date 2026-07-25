@@ -2,8 +2,6 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
-
 from fastapi import APIRouter, Depends
 from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,9 +16,7 @@ from db.models.product import Product
 from db.models.product_request import (
     PRODUCT_REQUEST_ADD_STOCK,
     PRODUCT_REQUEST_ADD_VARIANT,
-    PRODUCT_REQUEST_APPROVED,
     PRODUCT_REQUEST_PENDING_REVIEW,
-    PRODUCT_REQUEST_REJECTED,
     PRODUCT_REQUEST_TYPES,
     ProductRequest,
 )
@@ -46,6 +42,13 @@ from webapp.deps import (
 )
 from webapp.errors import ErrorCode, api_error
 from webapp.services import product_request_events
+from webapp.services.product_request_lifecycle import (
+    approve_product_request,
+    lock_product_request,
+    reject_product_request,
+    release_product_request,
+    request_product_request_changes,
+)
 from webapp.schemas import (
     CitySchema, LocationSchema,
     ProductSchema, VariantSchema,
@@ -660,64 +663,7 @@ async def admin_approve_product_request(
     actor=Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    result = await session.execute(
-        select(ProductRequest)
-        .options(
-            selectinload(ProductRequest.city),
-            selectinload(ProductRequest.location),
-            selectinload(ProductRequest.product),
-            selectinload(ProductRequest.variant),
-        )
-        .where(ProductRequest.id == request_id)
-        .with_for_update()
-    )
-    request = result.scalar_one_or_none()
-    if request is None:
-        raise api_error(404, ErrorCode.PRODUCT_REQUEST_NOT_FOUND, "Product request not found")
-    if request.status != PRODUCT_REQUEST_PENDING_REVIEW:
-        raise api_error(409, ErrorCode.PRODUCT_REQUEST_TRANSITION_INVALID, "Request is not pending review")
-    await _ensure_reviewer_can_review(actor, session, request.city_id)
-    await _ensure_request_location(session, request.location_id)
-    await _ensure_active_product(session, request.product_id)
-
-    if request.request_type == PRODUCT_REQUEST_ADD_VARIANT:
-        variant = ProductVariant(
-            product_id=request.product_id,
-            name_ru=_clean_variant_name(request.variant_name_ru),
-            name_pl=_clean_variant_name(request.variant_name_pl or request.variant_name_ru),
-            name_uk=_clean_variant_name(request.variant_name_uk or request.variant_name_ru),
-            price_override=request.price_override,
-        )
-        session.add(variant)
-        await session.flush()
-        request.published_variant_id = variant.id
-        stock_variant_id = variant.id
-    elif request.request_type == PRODUCT_REQUEST_ADD_STOCK:
-        variant = await _ensure_active_variant(session, request.product_id, request.variant_id)
-        request.published_variant_id = variant.id
-        stock_variant_id = variant.id
-    else:
-        raise api_error(422, ErrorCode.PRODUCT_REQUEST_TYPE_INVALID, "Product request type is invalid")
-
-    result = await session.execute(
-        select(LocationStock).where(
-            LocationStock.location_id == request.location_id,
-            LocationStock.variant_id == stock_variant_id,
-        )
-    )
-    stock = result.scalar_one_or_none()
-    if stock is None:
-        stock = LocationStock(location_id=request.location_id, variant_id=stock_variant_id, quantity=request.quantity)
-        session.add(stock)
-    elif request.request_type == PRODUCT_REQUEST_ADD_STOCK:
-        stock.quantity += request.quantity
-    else:
-        stock.quantity = request.quantity
-
-    request.status = PRODUCT_REQUEST_APPROVED
-    request.reviewer_tg_id = actor.tg_id
-    request.reviewed_at = datetime.now(tz=timezone.utc)
-    await session.commit()
+    request = await approve_product_request(request_id, actor=actor, session=session)
     return _product_request_schema(await _load_product_request(session, request.id))
 
 
@@ -728,31 +674,48 @@ async def admin_reject_product_request(
     actor=Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    reason = body.reason.strip()
-    if not reason:
-        raise api_error(422, ErrorCode.VALIDATION_REQUIRED, "Reject reason is required")
-    result = await session.execute(
-        select(ProductRequest)
-        .options(
-            selectinload(ProductRequest.city),
-            selectinload(ProductRequest.location),
-            selectinload(ProductRequest.product),
-            selectinload(ProductRequest.variant),
-        )
-        .where(ProductRequest.id == request_id)
-        .with_for_update()
+    request = await reject_product_request(
+        request_id,
+        body.effective_comment,
+        actor=actor,
+        session=session,
     )
-    request = result.scalar_one_or_none()
-    if request is None:
-        raise api_error(404, ErrorCode.PRODUCT_REQUEST_NOT_FOUND, "Product request not found")
-    if request.status != PRODUCT_REQUEST_PENDING_REVIEW:
-        raise api_error(409, ErrorCode.PRODUCT_REQUEST_TRANSITION_INVALID, "Request is not pending review")
-    await _ensure_reviewer_can_review(actor, session, request.city_id)
-    request.status = PRODUCT_REQUEST_REJECTED
-    request.reject_reason = reason
-    request.reviewer_tg_id = actor.tg_id
-    request.reviewed_at = datetime.now(tz=timezone.utc)
-    await session.commit()
+    return _product_request_schema(await _load_product_request(session, request.id))
+
+
+@router.post("/product-requests/{request_id}/need-changes", response_model=ProductRequestSchema)
+async def admin_request_product_request_changes(
+    request_id: int,
+    body: RejectProductRequestRequest,
+    actor=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    request = await request_product_request_changes(
+        request_id,
+        body.effective_comment,
+        actor=actor,
+        session=session,
+    )
+    return _product_request_schema(await _load_product_request(session, request.id))
+
+
+@router.post("/product-requests/{request_id}/lock", response_model=ProductRequestSchema)
+async def admin_lock_product_request(
+    request_id: int,
+    actor=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    request = await lock_product_request(request_id, actor=actor, session=session)
+    return _product_request_schema(await _load_product_request(session, request.id))
+
+
+@router.post("/product-requests/{request_id}/release", response_model=ProductRequestSchema)
+async def admin_release_product_request(
+    request_id: int,
+    actor=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    request = await release_product_request(request_id, actor=actor, session=session)
     return _product_request_schema(await _load_product_request(session, request.id))
 
 

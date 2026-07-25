@@ -20,6 +20,7 @@ from webapp.routes.admin import (
     admin_approve_product_request,
     admin_create_product_request,
     admin_create_staff_member,
+    admin_request_product_request_changes,
     admin_reject_product_request,
 )
 from webapp.schemas import (
@@ -419,6 +420,8 @@ class ProductRequestsContractTest(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("api.telegram.org", source)
 
     async def test_city_curator_approves_add_variant_in_assigned_city(self):
+        from webapp.services.product_request_lifecycle import lock_product_request
+
         async with self.session_maker() as session:
             city, location = await self._city_location(session)
             product = await self._product(session)
@@ -431,6 +434,7 @@ class ProductRequestsContractTest(unittest.IsolatedAsyncioTestCase):
                 actor=manager,
                 session=session,
             )
+            await lock_product_request(request.id, actor=curator, session=session)
 
             approved = await admin_approve_product_request(request.id, actor=curator, session=session)
             stock_result = await session.execute(
@@ -450,6 +454,8 @@ class ProductRequestsContractTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(stock.quantity, 4)
 
     async def test_project_admin_approves_request_in_any_city(self):
+        from webapp.services.product_request_lifecycle import lock_product_request
+
         async with self.session_maker() as session:
             _, location = await self._city_location(session, "Warsaw")
             product = await self._product(session)
@@ -460,6 +466,7 @@ class ProductRequestsContractTest(unittest.IsolatedAsyncioTestCase):
                 actor=manager,
                 session=session,
             )
+            await lock_product_request(request.id, actor=self.admin_actor, session=session)
 
             approved = await admin_approve_product_request(request.id, actor=self.admin_actor, session=session)
 
@@ -487,7 +494,324 @@ class ProductRequestsContractTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(raised.exception.status_code, 403)
         self.assertEqual(raised.exception.code, ErrorCode.PRODUCT_REQUEST_REVIEW_PERMISSION_DENIED)
 
+    async def test_approve_without_lock_returns_lock_required(self):
+        async with self.session_maker() as session:
+            city, location = await self._city_location(session)
+            product = await self._product(session)
+            manager = await self._user(session, 12001, "Manager")
+            curator = await self._user(session, 12002, "Curator")
+            await self._point_manager(session, manager, location)
+            await self._city_curator(session, curator, city)
+            request = await admin_create_product_request(
+                self._add_variant_body(location, product),
+                actor=manager,
+                session=session,
+            )
+
+            with self.assertRaises(ApiError) as raised:
+                await admin_approve_product_request(request.id, actor=curator, session=session)
+
+        self.assertEqual(raised.exception.status_code, 409)
+        self.assertEqual(raised.exception.code, ErrorCode.PRODUCT_REQUEST_LOCK_REQUIRED)
+
+    async def test_reject_without_lock_returns_lock_required(self):
+        async with self.session_maker() as session:
+            city, location = await self._city_location(session)
+            product = await self._product(session)
+            manager = await self._user(session, 12003, "Manager")
+            curator = await self._user(session, 12004, "Curator")
+            await self._point_manager(session, manager, location)
+            await self._city_curator(session, curator, city)
+            request = await admin_create_product_request(
+                self._add_variant_body(location, product),
+                actor=manager,
+                session=session,
+            )
+
+            with self.assertRaises(ApiError) as raised:
+                await admin_reject_product_request(
+                    request.id,
+                    RejectProductRequestRequest(reason="No stock card"),
+                    actor=curator,
+                    session=session,
+                )
+
+        self.assertEqual(raised.exception.status_code, 409)
+        self.assertEqual(raised.exception.code, ErrorCode.PRODUCT_REQUEST_LOCK_REQUIRED)
+
+    async def test_request_changes_without_lock_returns_lock_required(self):
+        async with self.session_maker() as session:
+            city, location = await self._city_location(session)
+            product = await self._product(session)
+            manager = await self._user(session, 12005, "Manager")
+            curator = await self._user(session, 12006, "Curator")
+            await self._point_manager(session, manager, location)
+            await self._city_curator(session, curator, city)
+            request = await admin_create_product_request(
+                self._add_variant_body(location, product),
+                actor=manager,
+                session=session,
+            )
+
+            with self.assertRaises(ApiError) as raised:
+                await admin_request_product_request_changes(
+                    request.id,
+                    RejectProductRequestRequest(reason="Add SKU photo"),
+                    actor=curator,
+                    session=session,
+                )
+
+        self.assertEqual(raised.exception.status_code, 409)
+        self.assertEqual(raised.exception.code, ErrorCode.PRODUCT_REQUEST_LOCK_REQUIRED)
+
+    async def test_lock_owner_approves_and_verdict_clears_lock(self):
+        from webapp.services.product_request_lifecycle import lock_product_request
+
+        async with self.session_maker() as session:
+            city, location = await self._city_location(session)
+            product = await self._product(session)
+            manager = await self._user(session, 12007, "Manager")
+            curator = await self._user(session, 12008, "Curator")
+            await self._point_manager(session, manager, location)
+            await self._city_curator(session, curator, city)
+            request = await admin_create_product_request(
+                self._add_variant_body(location, product),
+                actor=manager,
+                session=session,
+            )
+            await lock_product_request(request.id, actor=curator, session=session)
+
+            approved = await admin_approve_product_request(request.id, actor=curator, session=session)
+
+        self.assertEqual(approved.status, "approved")
+        self.assertIsNone(approved.locked_by_tg_id)
+        self.assertIsNone(approved.locked_at)
+
+    async def test_lock_owner_rejects_and_verdict_clears_lock(self):
+        from webapp.services.product_request_lifecycle import lock_product_request
+
+        async with self.session_maker() as session:
+            city, location = await self._city_location(session)
+            product = await self._product(session)
+            manager = await self._user(session, 12009, "Manager")
+            curator = await self._user(session, 12010, "Curator")
+            await self._point_manager(session, manager, location)
+            await self._city_curator(session, curator, city)
+            request = await admin_create_product_request(
+                self._add_variant_body(location, product),
+                actor=manager,
+                session=session,
+            )
+            await lock_product_request(request.id, actor=curator, session=session)
+
+            rejected = await admin_reject_product_request(
+                request.id,
+                RejectProductRequestRequest(reason="Duplicate"),
+                actor=curator,
+                session=session,
+            )
+
+        self.assertEqual(rejected.status, "rejected")
+        self.assertEqual(rejected.reject_reason, "Duplicate")
+        self.assertEqual(rejected.review_comment, "Duplicate")
+        self.assertIsNone(rejected.locked_by_tg_id)
+        self.assertIsNone(rejected.locked_at)
+
+    async def test_reject_accepts_comment_payload(self):
+        from webapp.services.product_request_lifecycle import lock_product_request
+
+        async with self.session_maker() as session:
+            city, location = await self._city_location(session)
+            product = await self._product(session)
+            manager = await self._user(session, 12011, "Manager")
+            curator = await self._user(session, 12012, "Curator")
+            await self._point_manager(session, manager, location)
+            await self._city_curator(session, curator, city)
+            request = await admin_create_product_request(
+                self._add_variant_body(location, product),
+                actor=manager,
+                session=session,
+            )
+            await lock_product_request(request.id, actor=curator, session=session)
+
+            rejected = await admin_reject_product_request(
+                request.id,
+                RejectProductRequestRequest(comment="Need product proof"),
+                actor=curator,
+                session=session,
+            )
+
+        self.assertEqual(rejected.status, "rejected")
+        self.assertEqual(rejected.review_comment, "Need product proof")
+
+    async def test_reject_empty_comment_returns_comment_required(self):
+        from webapp.services.product_request_lifecycle import lock_product_request
+
+        async with self.session_maker() as session:
+            city, location = await self._city_location(session)
+            product = await self._product(session)
+            manager = await self._user(session, 12013, "Manager")
+            curator = await self._user(session, 12014, "Curator")
+            await self._point_manager(session, manager, location)
+            await self._city_curator(session, curator, city)
+            request = await admin_create_product_request(
+                self._add_variant_body(location, product),
+                actor=manager,
+                session=session,
+            )
+            await lock_product_request(request.id, actor=curator, session=session)
+
+            with self.assertRaises(ApiError) as raised:
+                await admin_reject_product_request(
+                    request.id,
+                    RejectProductRequestRequest(comment="  "),
+                    actor=curator,
+                    session=session,
+                )
+
+        self.assertEqual(raised.exception.status_code, 422)
+        self.assertEqual(raised.exception.code, ErrorCode.PRODUCT_REQUEST_COMMENT_REQUIRED)
+
+    async def test_request_changes_requires_comment_sets_need_changes_and_clears_lock(self):
+        from webapp.services.product_request_lifecycle import lock_product_request
+
+        async with self.session_maker() as session:
+            city, location = await self._city_location(session)
+            product = await self._product(session)
+            manager = await self._user(session, 12015, "Manager")
+            curator = await self._user(session, 12016, "Curator")
+            await self._point_manager(session, manager, location)
+            await self._city_curator(session, curator, city)
+            request = await admin_create_product_request(
+                self._add_variant_body(location, product),
+                actor=manager,
+                session=session,
+            )
+            await lock_product_request(request.id, actor=curator, session=session)
+
+            changed = await admin_request_product_request_changes(
+                request.id,
+                RejectProductRequestRequest(comment="Fix quantity"),
+                actor=curator,
+                session=session,
+            )
+
+        self.assertEqual(changed.status, "need_changes")
+        self.assertEqual(changed.review_comment, "Fix quantity")
+        self.assertIsNone(changed.reject_reason)
+        self.assertIsNone(changed.locked_by_tg_id)
+        self.assertIsNone(changed.locked_at)
+
+    async def test_request_changes_empty_comment_returns_comment_required(self):
+        from webapp.services.product_request_lifecycle import lock_product_request
+
+        async with self.session_maker() as session:
+            city, location = await self._city_location(session)
+            product = await self._product(session)
+            manager = await self._user(session, 12017, "Manager")
+            curator = await self._user(session, 12018, "Curator")
+            await self._point_manager(session, manager, location)
+            await self._city_curator(session, curator, city)
+            request = await admin_create_product_request(
+                self._add_variant_body(location, product),
+                actor=manager,
+                session=session,
+            )
+            await lock_product_request(request.id, actor=curator, session=session)
+
+            with self.assertRaises(ApiError) as raised:
+                await admin_request_product_request_changes(
+                    request.id,
+                    RejectProductRequestRequest(comment=" "),
+                    actor=curator,
+                    session=session,
+                )
+
+        self.assertEqual(raised.exception.status_code, 422)
+        self.assertEqual(raised.exception.code, ErrorCode.PRODUCT_REQUEST_COMMENT_REQUIRED)
+
+    async def test_project_admin_cannot_verdict_another_reviewer_lock_without_takeover(self):
+        from webapp.services.product_request_lifecycle import lock_product_request
+
+        async with self.session_maker() as session:
+            city, location = await self._city_location(session)
+            product = await self._product(session)
+            manager = await self._user(session, 12019, "Manager")
+            curator = await self._user(session, 12020, "Curator")
+            await self._point_manager(session, manager, location)
+            await self._city_curator(session, curator, city)
+            request = await admin_create_product_request(
+                self._add_variant_body(location, product),
+                actor=manager,
+                session=session,
+            )
+            await lock_product_request(request.id, actor=curator, session=session)
+
+            with self.assertRaises(ApiError) as raised:
+                await admin_approve_product_request(request.id, actor=self.admin_actor, session=session)
+
+        self.assertEqual(raised.exception.status_code, 409)
+        self.assertEqual(raised.exception.code, ErrorCode.PRODUCT_REQUEST_LOCK_REQUIRED)
+
+    async def test_project_admin_cannot_reject_another_reviewer_lock_without_takeover(self):
+        from webapp.services.product_request_lifecycle import lock_product_request
+
+        async with self.session_maker() as session:
+            city, location = await self._city_location(session)
+            product = await self._product(session)
+            manager = await self._user(session, 12023, "Manager")
+            curator = await self._user(session, 12024, "Curator")
+            await self._point_manager(session, manager, location)
+            await self._city_curator(session, curator, city)
+            request = await admin_create_product_request(
+                self._add_variant_body(location, product),
+                actor=manager,
+                session=session,
+            )
+            await lock_product_request(request.id, actor=curator, session=session)
+
+            with self.assertRaises(ApiError) as raised:
+                await admin_reject_product_request(
+                    request.id,
+                    RejectProductRequestRequest(reason="No"),
+                    actor=self.admin_actor,
+                    session=session,
+                )
+
+        self.assertEqual(raised.exception.status_code, 409)
+        self.assertEqual(raised.exception.code, ErrorCode.PRODUCT_REQUEST_LOCK_REQUIRED)
+
+    async def test_project_admin_cannot_request_changes_on_another_reviewer_lock_without_takeover(self):
+        from webapp.services.product_request_lifecycle import lock_product_request
+
+        async with self.session_maker() as session:
+            city, location = await self._city_location(session)
+            product = await self._product(session)
+            manager = await self._user(session, 12025, "Manager")
+            curator = await self._user(session, 12026, "Curator")
+            await self._point_manager(session, manager, location)
+            await self._city_curator(session, curator, city)
+            request = await admin_create_product_request(
+                self._add_variant_body(location, product),
+                actor=manager,
+                session=session,
+            )
+            await lock_product_request(request.id, actor=curator, session=session)
+
+            with self.assertRaises(ApiError) as raised:
+                await admin_request_product_request_changes(
+                    request.id,
+                    RejectProductRequestRequest(comment="Fix"),
+                    actor=self.admin_actor,
+                    session=session,
+                )
+
+        self.assertEqual(raised.exception.status_code, 409)
+        self.assertEqual(raised.exception.code, ErrorCode.PRODUCT_REQUEST_LOCK_REQUIRED)
+
     async def test_reject_requires_reason(self):
+        from webapp.services.product_request_lifecycle import lock_product_request
+
         async with self.session_maker() as session:
             city, location = await self._city_location(session)
             product = await self._product(session)
@@ -500,6 +824,7 @@ class ProductRequestsContractTest(unittest.IsolatedAsyncioTestCase):
                 actor=manager,
                 session=session,
             )
+            await lock_product_request(request.id, actor=curator, session=session)
 
             with self.assertRaises(ApiError) as raised:
                 await admin_reject_product_request(
@@ -510,9 +835,11 @@ class ProductRequestsContractTest(unittest.IsolatedAsyncioTestCase):
                 )
 
         self.assertEqual(raised.exception.status_code, 422)
-        self.assertEqual(raised.exception.code, ErrorCode.VALIDATION_REQUIRED)
+        self.assertEqual(raised.exception.code, ErrorCode.PRODUCT_REQUEST_COMMENT_REQUIRED)
 
     async def test_approve_add_stock_increments_existing_location_stock(self):
+        from webapp.services.product_request_lifecycle import lock_product_request
+
         async with self.session_maker() as session:
             city, location = await self._city_location(session)
             product = await self._product(session)
@@ -533,6 +860,7 @@ class ProductRequestsContractTest(unittest.IsolatedAsyncioTestCase):
                 actor=manager,
                 session=session,
             )
+            await lock_product_request(request.id, actor=curator, session=session)
 
             approved = await admin_approve_product_request(request.id, actor=curator, session=session)
             stock_result = await session.execute(
@@ -547,6 +875,8 @@ class ProductRequestsContractTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(stock.quantity, 11)
 
     async def test_approved_request_cannot_be_approved_again(self):
+        from webapp.services.product_request_lifecycle import lock_product_request
+
         async with self.session_maker() as session:
             city, location = await self._city_location(session)
             product = await self._product(session)
@@ -568,9 +898,44 @@ class ProductRequestsContractTest(unittest.IsolatedAsyncioTestCase):
                 session=session,
             )
 
+            await lock_product_request(request.id, actor=curator, session=session)
             await admin_approve_product_request(request.id, actor=curator, session=session)
             with self.assertRaises(ApiError) as raised:
                 await admin_approve_product_request(request.id, actor=curator, session=session)
+
+        self.assertEqual(raised.exception.status_code, 409)
+        self.assertEqual(raised.exception.code, ErrorCode.PRODUCT_REQUEST_TRANSITION_INVALID)
+
+    async def test_rejected_request_rejects_request_changes(self):
+        from webapp.services.product_request_lifecycle import lock_product_request
+
+        async with self.session_maker() as session:
+            city, location = await self._city_location(session)
+            product = await self._product(session)
+            manager = await self._user(session, 12021, "Manager")
+            curator = await self._user(session, 12022, "Curator")
+            await self._point_manager(session, manager, location)
+            await self._city_curator(session, curator, city)
+            request = await admin_create_product_request(
+                self._add_variant_body(location, product),
+                actor=manager,
+                session=session,
+            )
+            await lock_product_request(request.id, actor=curator, session=session)
+            await admin_reject_product_request(
+                request.id,
+                RejectProductRequestRequest(reason="No"),
+                actor=curator,
+                session=session,
+            )
+
+            with self.assertRaises(ApiError) as raised:
+                await admin_request_product_request_changes(
+                    request.id,
+                    RejectProductRequestRequest(comment="Again"),
+                    actor=curator,
+                    session=session,
+                )
 
         self.assertEqual(raised.exception.status_code, 409)
         self.assertEqual(raised.exception.code, ErrorCode.PRODUCT_REQUEST_TRANSITION_INVALID)
@@ -587,7 +952,11 @@ class ProductRequestsContractTest(unittest.IsolatedAsyncioTestCase):
             )
 
     def test_approve_uses_row_lock_for_pending_request_transition(self):
-        source = inspect.getsource(admin_approve_product_request)
+        from webapp.services import product_request_lifecycle
+
+        approve_source = inspect.getsource(product_request_lifecycle.approve_product_request)
+        source = inspect.getsource(product_request_lifecycle._load_product_request_for_update)
+        self.assertIn("_load_product_request_for_update", approve_source)
         self.assertIn("with_for_update", source)
 
 

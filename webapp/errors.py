@@ -99,6 +99,7 @@ class ErrorCode:
     PRODUCT_REQUEST_NOT_FOUND = "product_request.not_found"
     PRODUCT_REQUEST_STATUS_INVALID = "product_request.status_invalid"
     PRODUCT_REQUEST_TRANSITION_INVALID = "product_request.transition_invalid"
+    PRODUCT_REQUEST_COMMENT_REQUIRED = "product_request.comment_required"
     PRODUCT_REQUEST_LOCK_REQUIRED = "product_request.lock_required"
     PRODUCT_REQUEST_LOCK_EXISTS = "product_request.lock_exists"
     PRODUCT_REQUEST_LOCK_NOT_OWNER = "product_request.lock_not_owner"

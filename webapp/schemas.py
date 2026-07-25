@@ -313,7 +313,12 @@ class CreateProductRequestRequest(BaseModel):
     quantity: int = Field(ge=1)
 
 class RejectProductRequestRequest(BaseModel):
-    reason: str
+    reason: Optional[str] = None
+    comment: Optional[str] = None
+
+    @property
+    def effective_comment(self) -> str:
+        return (self.comment if self.comment is not None else self.reason or "").strip()
 
 
 class ProductRequestCommentRequest(BaseModel):
