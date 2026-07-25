@@ -429,6 +429,11 @@ const ru = {
       rejectTitle: 'Отклонить заявку',
       rejectSubtitle: 'Причина обязательна и будет видна автору заявки.',
       reject: 'Отклонить',
+      needChangesTitle: 'Запросить изменения',
+      needChangesSubtitle: 'Комментарий будет виден менеджеру перед повторной отправкой.',
+      editTitle: 'Редактировать заявку',
+      editSubtitle: 'После сохранения заявка вернется на проверку.',
+      lockedBy: 'Проверяет ID {id}',
       modes: {
         active: 'Активные',
         archive: 'Архив',
@@ -476,6 +481,7 @@ const ru = {
         variantName: 'Например: Blueberry Ice',
         price: 'Оставьте пустым для базовой цены',
         rejectReason: 'Что нужно исправить',
+        managerComment: 'Что нужно изменить перед повторной проверкой',
       },
     },
     orders: {

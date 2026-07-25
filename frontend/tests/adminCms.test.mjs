@@ -71,7 +71,7 @@ test('admin product requests page is routed and uses cms/i18n patterns', () => {
   assert.match(productRequestsSource, /const canCreate = adminRole === 'point_manager'/);
   assert.match(productRequestsSource, /const canReview = adminRole === 'project_admin' \|\| adminRole === 'city_curator'/);
   assert.match(productRequestsSource, /\{canCreate && \(/);
-  assert.match(productRequestsSource, /\{canReview && request\.status === 'pending_review' && \(/);
+  assert.match(productRequestsSource, /getProductRequestActions\(\{ role: adminRole, currentTgId, request, isOwnEditableRequest \}\)/);
 });
 
 test('admin product request review loop frontend contract is exposed', () => {
@@ -120,6 +120,26 @@ test('admin product request review loop frontend contract is exposed', () => {
   assert.match(ruSource, /updated: 'Изменения сохранены\.'/);
 
   assert.doesNotMatch(productRequestsSource, />\s*(Запросить изменения|Взять в проверку|Снять блокировку|Перехватить|Редактировать|Сохранить изменения)\s*</);
+});
+
+test('admin product requests page wires review loop controls', () => {
+  assert.match(productRequestsSource, /import \{ getProductRequestActions \} from '\.\/productRequestActions'/);
+  assert.match(productRequestsSource, /adminApi\.getProductRequests\(\{ mode, status: selectedStatus \}\)/);
+  assert.match(productRequestsSource, /adminApi\.lockProductRequest/);
+  assert.match(productRequestsSource, /adminApi\.releaseProductRequest/);
+  assert.match(productRequestsSource, /adminApi\.needChangesProductRequest/);
+  assert.match(productRequestsSource, /adminApi\.updateProductRequest/);
+  assert.match(productRequestsSource, /t\('admin\.productRequests\.modes\.active'\)/);
+  assert.match(productRequestsSource, /t\('admin\.productRequests\.modes\.archive'\)/);
+  assert.match(productRequestsSource, /t\('admin\.productRequests\.fields\.latestComment'\)/);
+  assert.match(productRequestsSource, /request\.review_comment/);
+  assert.match(productRequestsSource, /setEditing\(request\)/);
+  assert.match(productRequestsSource, /editing && editForm && \(/);
+  assert.match(productRequestsSource, /request\.status === 'need_changes'/);
+  assert.match(productRequestsSource, /actions\.canApprove/);
+  assert.match(productRequestsSource, /actions\.canReject/);
+  assert.match(productRequestsSource, /actions\.canRequestChanges/);
+  assert.doesNotMatch(productRequestsSource, /\{canReview && request\.status === 'pending_review' && \(/);
 });
 
 test('admin layout guards direct child routes by role', () => {
