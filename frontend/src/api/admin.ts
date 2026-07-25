@@ -106,12 +106,13 @@ export interface AdminAccess {
 }
 
 export type ProductRequestType = 'ADD_VARIANT' | 'ADD_STOCK';
-export type ProductRequestStatus = 'pending_review' | 'approved' | 'rejected';
+export type ProductRequestStatus = 'pending_review' | 'need_changes' | 'approved' | 'rejected';
 
 export interface AdminProductRequest {
   id: number;
   request_type: ProductRequestType;
   status: ProductRequestStatus;
+  requester_user_id?: number;
   requester_tg_id: number;
   city_id: number;
   city_name?: string;
@@ -127,9 +128,13 @@ export interface AdminProductRequest {
   price_override?: string;
   quantity: number;
   reject_reason?: string;
+  review_comment?: string;
   published_variant_id?: number;
   reviewer_tg_id?: number;
+  locked_by_tg_id?: number;
+  locked_at?: string;
   created_at: string;
+  updated_at: string;
   reviewed_at?: string;
 }
 
@@ -155,6 +160,14 @@ export interface ProductRequestPayload {
   variant_name_uk?: string;
   price_override?: string;
   quantity: number;
+}
+
+export interface ProductRequestUpdatePayload {
+  variant_name_ru?: string;
+  variant_name_pl?: string;
+  variant_name_uk?: string;
+  price_override?: string | null;
+  quantity?: number;
 }
 
 // ── API ────────────────────────────────────────────────────
@@ -224,15 +237,35 @@ export const adminApi = {
     req<void>(`/api/admin/staff/${id}/hard-delete`, { method: 'DELETE' }),
 
   // Product requests
-  getProductRequests: () => req<AdminProductRequest[]>('/api/admin/product-requests'),
+  getProductRequests: (params?: { mode?: 'active' | 'archive'; status?: ProductRequestStatus }) => {
+    const q = new URLSearchParams();
+    if (params?.mode) q.set('mode', params.mode);
+    if (params?.status) q.set('status', params.status);
+    const query = q.toString();
+    return req<AdminProductRequest[]>(`/api/admin/product-requests${query ? `?${query}` : ''}`);
+  },
   getProductRequestOptions: () => req<ProductRequestOptions>('/api/admin/product-requests/options'),
   createProductRequest: (data: ProductRequestPayload) =>
     req<AdminProductRequest>('/api/admin/product-requests', { method: 'POST', body: JSON.stringify(data) }),
+  lockProductRequest: (id: number) =>
+    req<AdminProductRequest>(`/api/admin/product-requests/${id}/lock`, { method: 'POST' }),
+  releaseProductRequest: (id: number) =>
+    req<AdminProductRequest>(`/api/admin/product-requests/${id}/release`, { method: 'POST' }),
   approveProductRequest: (id: number) =>
     req<AdminProductRequest>(`/api/admin/product-requests/${id}/approve`, { method: 'POST' }),
   rejectProductRequest: (id: number, reason: string) =>
     req<AdminProductRequest>(`/api/admin/product-requests/${id}/reject`, {
       method: 'POST',
       body: JSON.stringify({ reason }),
+    }),
+  needChangesProductRequest: (id: number, comment: string) =>
+    req<AdminProductRequest>(`/api/admin/product-requests/${id}/need-changes`, {
+      method: 'POST',
+      body: JSON.stringify({ comment }),
+    }),
+  updateProductRequest: (id: number, data: ProductRequestUpdatePayload) =>
+    req<AdminProductRequest>(`/api/admin/product-requests/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
     }),
 };

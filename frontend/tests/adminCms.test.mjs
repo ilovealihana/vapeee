@@ -9,6 +9,7 @@ const indexHtml = readFileSync(new URL('index.html', projectRoot), 'utf8');
 const mainSource = readFileSync(new URL('main.tsx', root), 'utf8');
 const appSource = readFileSync(new URL('App.tsx', root), 'utf8');
 const adminApiSource = readFileSync(new URL('api/admin.ts', root), 'utf8');
+const ruSource = readFileSync(new URL('i18n/locales/ru.ts', root), 'utf8');
 const layoutSource = readFileSync(new URL('pages/admin/AdminLayout.tsx', root), 'utf8');
 const citiesSource = readFileSync(new URL('pages/admin/AdminCities.tsx', root), 'utf8');
 const productsSource = readFileSync(new URL('pages/admin/AdminProducts.tsx', root), 'utf8');
@@ -53,7 +54,7 @@ test('admin product requests page is routed and uses cms/i18n patterns', () => {
   assert.match(appSource, /import AdminProductRequests from '\.\/pages\/admin\/AdminProductRequests'/);
   assert.match(appSource, /path="product-requests" element=\{<AdminProductRequests \/>\}/);
   assert.match(adminApiSource, /export type ProductRequestType = 'ADD_VARIANT' \| 'ADD_STOCK'/);
-  assert.match(adminApiSource, /getProductRequests: \(\) => req<AdminProductRequest\[\]>\('\/api\/admin\/product-requests'\)/);
+  assert.match(adminApiSource, /getProductRequests: \(params\?: \{ mode\?: 'active' \| 'archive'; status\?: ProductRequestStatus \}\)/);
   assert.match(adminApiSource, /createProductRequest:/);
   assert.match(adminApiSource, /approveProductRequest:/);
   assert.match(adminApiSource, /rejectProductRequest:/);
@@ -71,6 +72,54 @@ test('admin product requests page is routed and uses cms/i18n patterns', () => {
   assert.match(productRequestsSource, /const canReview = adminRole === 'project_admin' \|\| adminRole === 'city_curator'/);
   assert.match(productRequestsSource, /\{canCreate && \(/);
   assert.match(productRequestsSource, /\{canReview && request\.status === 'pending_review' && \(/);
+});
+
+test('admin product request review loop frontend contract is exposed', () => {
+  assert.match(adminApiSource, /export type ProductRequestStatus = 'pending_review' \| 'need_changes' \| 'approved' \| 'rejected'/);
+  assert.match(adminApiSource, /requester_user_id\?: number/);
+  assert.match(adminApiSource, /review_comment\?: string/);
+  assert.match(adminApiSource, /locked_by_tg_id\?: number/);
+  assert.match(adminApiSource, /locked_at\?: string/);
+  assert.match(adminApiSource, /updated_at: string/);
+  assert.match(adminApiSource, /export interface ProductRequestUpdatePayload/);
+  assert.match(adminApiSource, /variant_name_ru\?: string/);
+  assert.match(adminApiSource, /variant_name_pl\?: string/);
+  assert.match(adminApiSource, /variant_name_uk\?: string/);
+  assert.match(adminApiSource, /price_override\?: string \| null/);
+  assert.match(adminApiSource, /quantity\?: number/);
+  assert.match(adminApiSource, /getProductRequests: \(params\?: \{ mode\?: 'active' \| 'archive'; status\?: ProductRequestStatus \}\)/);
+  assert.match(adminApiSource, /if \(params\?\.mode\) q\.set\('mode', params\.mode\)/);
+  assert.match(adminApiSource, /if \(params\?\.status\) q\.set\('status', params\.status\)/);
+  assert.match(adminApiSource, /`\/api\/admin\/product-requests\$\{query \? `\?\$\{query\}` : ''\}`/);
+  assert.match(adminApiSource, /lockProductRequest: \(id: number\) =>\s*req<AdminProductRequest>\(`\/api\/admin\/product-requests\/\$\{id\}\/lock`, \{ method: 'POST' \}\)/);
+  assert.match(adminApiSource, /releaseProductRequest: \(id: number\) =>\s*req<AdminProductRequest>\(`\/api\/admin\/product-requests\/\$\{id\}\/release`, \{ method: 'POST' \}\)/);
+  assert.match(adminApiSource, /needChangesProductRequest: \(id: number, comment: string\) =>\s*req<AdminProductRequest>\(`\/api\/admin\/product-requests\/\$\{id\}\/need-changes`, \{[\s\S]*method: 'POST'[\s\S]*body: JSON\.stringify\(\{ comment \}\)/);
+  assert.match(adminApiSource, /updateProductRequest: \(id: number, data: ProductRequestUpdatePayload\) =>\s*req<AdminProductRequest>\(`\/api\/admin\/product-requests\/\$\{id\}`, \{[\s\S]*method: 'PATCH'[\s\S]*body: JSON\.stringify\(data\)/);
+
+  assert.match(ruSource, /need_changes: 'Требует изменений'/);
+  assert.match(ruSource, /needChanges: 'Запросить изменения'/);
+  assert.match(ruSource, /active: 'Активные'/);
+  assert.match(ruSource, /archive: 'Архив'/);
+  assert.match(ruSource, /allActive: 'Все активные'/);
+  assert.match(ruSource, /pendingReview: 'На проверке'/);
+  assert.match(ruSource, /needsChanges: 'Требуют изменений'/);
+  assert.match(ruSource, /allArchive: 'Весь архив'/);
+  assert.match(ruSource, /approved: 'Подтвержденные'/);
+  assert.match(ruSource, /rejected: 'Отклоненные'/);
+  assert.match(ruSource, /takeReview: 'Взять в проверку'/);
+  assert.match(ruSource, /releaseLock: 'Снять блокировку'/);
+  assert.match(ruSource, /takeover: 'Перехватить'/);
+  assert.match(ruSource, /edit: 'Редактировать'/);
+  assert.match(ruSource, /saveChanges: 'Сохранить изменения'/);
+  assert.match(ruSource, /reviewComment: 'Комментарий проверки'/);
+  assert.match(ruSource, /latestComment: 'Последний комментарий'/);
+  assert.match(ruSource, /managerComment: 'Комментарий для менеджера'/);
+  assert.match(ruSource, /locked: 'Заявка взята в проверку\.'/);
+  assert.match(ruSource, /released: 'Блокировка снята\.'/);
+  assert.match(ruSource, /changesRequested: 'Изменения запрошены\.'/);
+  assert.match(ruSource, /updated: 'Изменения сохранены\.'/);
+
+  assert.doesNotMatch(productRequestsSource, />\s*(Запросить изменения|Взять в проверку|Снять блокировку|Перехватить|Редактировать|Сохранить изменения)\s*</);
 });
 
 test('admin layout guards direct child routes by role', () => {
