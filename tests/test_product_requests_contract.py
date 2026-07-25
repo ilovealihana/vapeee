@@ -22,6 +22,7 @@ from webapp.routes.admin import (
     admin_create_product_request,
     admin_create_staff_member,
     admin_edit_product_request,
+    admin_list_product_requests,
     admin_request_product_request_changes,
     admin_reject_product_request,
 )
@@ -1311,6 +1312,180 @@ class ProductRequestsContractTest(unittest.IsolatedAsyncioTestCase):
                     )
                 self.assertEqual(raised.exception.status_code, 409)
                 self.assertEqual(raised.exception.code, ErrorCode.PRODUCT_REQUEST_TRANSITION_INVALID)
+
+    async def test_list_active_mode_returns_pending_and_need_changes(self):
+        from webapp.services.product_request_lifecycle import lock_product_request
+
+        async with self.session_maker() as session:
+            city, location = await self._city_location(session)
+            product = await self._product(session)
+            manager = await self._user(session, 14001, "Manager")
+            curator = await self._user(session, 14002, "Curator")
+            await self._point_manager(session, manager, location)
+            await self._city_curator(session, curator, city)
+            pending = await admin_create_product_request(self._add_variant_body(location, product), actor=manager, session=session)
+            need_changes = await admin_create_product_request(self._add_variant_body(location, product), actor=manager, session=session)
+            approved = await admin_create_product_request(self._add_variant_body(location, product), actor=manager, session=session)
+            await self._move_request_to_need_changes(session, need_changes.id, curator)
+            await lock_product_request(approved.id, actor=curator, session=session)
+            await admin_approve_product_request(approved.id, actor=curator, session=session)
+
+            rows = await admin_list_product_requests(mode="active", actor=curator, session=session)
+
+        self.assertEqual({row.id for row in rows}, {pending.id, need_changes.id})
+
+    async def test_list_archive_mode_returns_approved_and_rejected(self):
+        from webapp.services.product_request_lifecycle import lock_product_request
+
+        async with self.session_maker() as session:
+            city, location = await self._city_location(session)
+            product = await self._product(session)
+            manager = await self._user(session, 14003, "Manager")
+            curator = await self._user(session, 14004, "Curator")
+            await self._point_manager(session, manager, location)
+            await self._city_curator(session, curator, city)
+            pending = await admin_create_product_request(self._add_variant_body(location, product), actor=manager, session=session)
+            approved = await admin_create_product_request(self._add_variant_body(location, product), actor=manager, session=session)
+            rejected = await admin_create_product_request(self._add_variant_body(location, product), actor=manager, session=session)
+            await lock_product_request(approved.id, actor=curator, session=session)
+            await admin_approve_product_request(approved.id, actor=curator, session=session)
+            await lock_product_request(rejected.id, actor=curator, session=session)
+            await admin_reject_product_request(
+                rejected.id,
+                RejectProductRequestRequest(reason="No"),
+                actor=curator,
+                session=session,
+            )
+
+            rows = await admin_list_product_requests(mode="archive", actor=curator, session=session)
+
+        self.assertEqual({row.id for row in rows}, {approved.id, rejected.id})
+        self.assertNotIn(pending.id, {row.id for row in rows})
+
+    async def test_list_status_filter_combines_with_mode(self):
+        async with self.session_maker() as session:
+            city, location = await self._city_location(session)
+            product = await self._product(session)
+            manager = await self._user(session, 14005, "Manager")
+            curator = await self._user(session, 14006, "Curator")
+            await self._point_manager(session, manager, location)
+            await self._city_curator(session, curator, city)
+            need_changes = await admin_create_product_request(self._add_variant_body(location, product), actor=manager, session=session)
+            pending = await admin_create_product_request(self._add_variant_body(location, product), actor=manager, session=session)
+            await self._move_request_to_need_changes(session, need_changes.id, curator)
+
+            rows = await admin_list_product_requests(
+                mode="active",
+                status="need_changes",
+                actor=curator,
+                session=session,
+            )
+
+        self.assertEqual([row.id for row in rows], [need_changes.id])
+        self.assertNotIn(pending.id, [row.id for row in rows])
+
+    async def test_list_status_only_filter_returns_matching_status(self):
+        async with self.session_maker() as session:
+            city, location = await self._city_location(session)
+            product = await self._product(session)
+            manager = await self._user(session, 14014, "Manager")
+            curator = await self._user(session, 14015, "Curator")
+            await self._point_manager(session, manager, location)
+            await self._city_curator(session, curator, city)
+            need_changes = await admin_create_product_request(self._add_variant_body(location, product), actor=manager, session=session)
+            pending = await admin_create_product_request(self._add_variant_body(location, product), actor=manager, session=session)
+            await self._move_request_to_need_changes(session, need_changes.id, curator)
+
+            rows = await admin_list_product_requests(status="need_changes", actor=curator, session=session)
+
+        self.assertEqual({row.id for row in rows}, {need_changes.id})
+        self.assertNotIn(pending.id, {row.id for row in rows})
+
+    async def test_list_incompatible_mode_status_returns_empty_list(self):
+        async with self.session_maker() as session:
+            city, location = await self._city_location(session)
+            product = await self._product(session)
+            manager = await self._user(session, 14007, "Manager")
+            curator = await self._user(session, 14008, "Curator")
+            await self._point_manager(session, manager, location)
+            await self._city_curator(session, curator, city)
+            await admin_create_product_request(self._add_variant_body(location, product), actor=manager, session=session)
+
+            active_approved = await admin_list_product_requests(
+                mode="active",
+                status="approved",
+                actor=curator,
+                session=session,
+            )
+            archive_need_changes = await admin_list_product_requests(
+                mode="archive",
+                status="need_changes",
+                actor=curator,
+                session=session,
+            )
+
+        self.assertEqual(active_approved, [])
+        self.assertEqual(archive_need_changes, [])
+
+    async def test_list_invalid_mode_or_status_returns_status_invalid(self):
+        async with self.session_maker() as session:
+            _, location = await self._city_location(session)
+            product = await self._product(session)
+            manager = await self._user(session, 14009, "Manager")
+            await self._point_manager(session, manager, location)
+            await admin_create_product_request(self._add_variant_body(location, product), actor=manager, session=session)
+
+            for query in ({"mode": "future"}, {"status": "draft"}):
+                with self.subTest(query=query):
+                    with self.assertRaises(ApiError) as raised:
+                        await admin_list_product_requests(actor=self.admin_actor, session=session, **query)
+                    self.assertEqual(raised.exception.status_code, 422)
+                    self.assertEqual(raised.exception.code, ErrorCode.PRODUCT_REQUEST_STATUS_INVALID)
+
+    async def test_list_filters_preserve_city_curator_and_point_manager_scoping(self):
+        async with self.session_maker() as session:
+            own_city, own_location = await self._city_location(session, "OwnCity")
+            _, other_location = await self._city_location(session, "OtherCity")
+            product = await self._product(session)
+            own_manager = await self._user(session, 14010, "OwnManager")
+            other_manager = await self._user(session, 14011, "OtherManager")
+            curator = await self._user(session, 14012, "Curator")
+            await self._point_manager(session, own_manager, own_location)
+            await self._point_manager(session, other_manager, other_location)
+            await self._city_curator(session, curator, own_city)
+            own_request = await admin_create_product_request(self._add_variant_body(own_location, product), actor=own_manager, session=session)
+            other_request = await admin_create_product_request(self._add_variant_body(other_location, product), actor=other_manager, session=session)
+
+            curator_rows = await admin_list_product_requests(mode="active", actor=curator, session=session)
+            manager_rows = await admin_list_product_requests(mode="active", actor=own_manager, session=session)
+            admin_rows = await admin_list_product_requests(mode="active", actor=self.admin_actor, session=session)
+
+        self.assertEqual({row.id for row in curator_rows}, {own_request.id})
+        self.assertEqual({row.id for row in manager_rows}, {own_request.id})
+        self.assertEqual({row.id for row in admin_rows}, {own_request.id, other_request.id})
+        self.assertNotIn(other_request.id, {row.id for row in curator_rows})
+
+    async def test_product_request_schema_review_comment_falls_back_to_reject_reason(self):
+        async with self.session_maker() as session:
+            city, location = await self._city_location(session)
+            product = await self._product(session)
+            manager = await self._user(session, 14013, "Manager")
+            await self._point_manager(session, manager, location)
+            request = await admin_create_product_request(self._add_variant_body(location, product), actor=manager, session=session)
+            db_request = await session.get(ProductRequest, request.id)
+            db_request.status = "rejected"
+            db_request.reject_reason = "Legacy reject"
+            db_request.review_comment = None
+            await session.commit()
+
+            rows = await admin_list_product_requests(
+                mode="archive",
+                status="rejected",
+                actor=self.admin_actor,
+                session=session,
+            )
+
+        self.assertEqual(rows[0].review_comment, "Legacy reject")
 
     def test_create_product_request_rejects_negative_price_override(self):
         with self.assertRaises(ValidationError):

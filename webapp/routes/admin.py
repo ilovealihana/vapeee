@@ -16,7 +16,10 @@ from db.models.product import Product
 from db.models.product_request import (
     PRODUCT_REQUEST_ADD_STOCK,
     PRODUCT_REQUEST_ADD_VARIANT,
+    PRODUCT_REQUEST_ACTIVE_STATUSES,
+    PRODUCT_REQUEST_FINAL_STATUSES,
     PRODUCT_REQUEST_PENDING_REVIEW,
+    PRODUCT_REQUEST_STATUSES,
     PRODUCT_REQUEST_TYPES,
     ProductRequest,
 )
@@ -467,7 +470,7 @@ def _product_request_schema(request: ProductRequest) -> ProductRequestSchema:
         price_override=request.price_override,
         quantity=request.quantity,
         reject_reason=request.reject_reason,
-        review_comment=request.review_comment,
+        review_comment=request.review_comment or request.reject_reason,
         published_variant_id=request.published_variant_id,
         reviewer_tg_id=request.reviewer_tg_id,
         locked_by_tg_id=request.locked_by_tg_id,
@@ -538,9 +541,16 @@ async def _ensure_reviewer_can_review(actor, session: AsyncSession, city_id: int
 
 @router.get("/product-requests", response_model=list[ProductRequestSchema])
 async def admin_list_product_requests(
+    mode: str | None = None,
+    status: str | None = None,
     actor=Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
+    if mode is not None and mode not in {"active", "archive"}:
+        raise api_error(422, ErrorCode.PRODUCT_REQUEST_STATUS_INVALID, "Product request mode is invalid")
+    if status is not None and status not in PRODUCT_REQUEST_STATUSES:
+        raise api_error(422, ErrorCode.PRODUCT_REQUEST_STATUS_INVALID, "Product request status is invalid")
+
     q = (
         select(ProductRequest)
         .options(
@@ -551,6 +561,17 @@ async def admin_list_product_requests(
         )
         .order_by(ProductRequest.created_at.desc(), ProductRequest.id.desc())
     )
+    allowed_statuses: set[str] | None = None
+    if mode == "active":
+        allowed_statuses = set(PRODUCT_REQUEST_ACTIVE_STATUSES)
+    elif mode == "archive":
+        allowed_statuses = set(PRODUCT_REQUEST_FINAL_STATUSES)
+
+    if status is not None:
+        allowed_statuses = {status} if allowed_statuses is None else allowed_statuses & {status}
+    if allowed_statuses is not None:
+        q = q.where(ProductRequest.status.in_(allowed_statuses or {"__none__"}))
+
     if not await is_project_admin_user(actor, session):
         member = await _active_staff_for_actor(actor, session)
         if member is None:
