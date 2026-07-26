@@ -41,6 +41,19 @@ test('google map selector keeps React loading UI outside the Google-mutated map 
   assert.match(css, /\.google-map-selector-map/);
 });
 
+test('google map selector uses custom marker taps instead of a list below the map', () => {
+  assert.match(componentSource, /importLibrary\('marker'\)/);
+  assert.match(componentSource, /AdvancedMarkerElement/);
+  assert.match(componentSource, /\/map-marker-r\.png/);
+  assert.match(componentSource, /className="google-map-selector-card"/);
+  assert.match(componentSource, /setSelectedMarker/);
+  assert.match(componentSource, /onSelectLocation\(selectedMarker\.source\)/);
+  assert.doesNotMatch(componentSource, /className="google-map-selector-points"/);
+  assert.doesNotMatch(componentSource, /markers\.map\(\(marker\) => \(\s*<button key=\{marker\.id\}/);
+  assert.match(css, /\.google-map-selector-marker/);
+  assert.match(css, /\.google-map-selector-card/);
+});
+
 test('catalog selector delegates map tab rendering to GoogleMapSelector', () => {
   assert.match(selectorSource, /import GoogleMapSelector from '\.\.\/components\/GoogleMapSelector';/);
   assert.match(selectorSource, /<GoogleMapSelector/);

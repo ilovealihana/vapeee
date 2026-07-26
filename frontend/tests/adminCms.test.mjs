@@ -224,6 +224,17 @@ test('admin city and product CRUD pages use i18n keys for visible labels', () =>
   assert.doesNotMatch(productsSource, /title="Товары"/);
 });
 
+test('admin location form uses Google Places autocomplete for address suggestions', () => {
+  assert.match(citiesSource, /locAddressInputRef/);
+  assert.match(citiesSource, /VITE_GOOGLE_MAPS_API_KEY/);
+  assert.match(citiesSource, /libraries=places/);
+  assert.match(citiesSource, /maps\?\.places\?\.Autocomplete/);
+  assert.match(citiesSource, /componentRestrictions:\s*\{\s*country:\s*'pl'\s*\}/);
+  assert.match(citiesSource, /fields:\s*\['formatted_address', 'geometry', 'name'\]/);
+  assert.match(citiesSource, /place_changed/);
+  assert.match(citiesSource, /setLocForm\(f => \(\{ \.\.\.f, address \}\)\)/);
+});
+
 test('admin stock and orders pages use i18n keys for visible labels', () => {
   for (const source of [stockSource, ordersSource]) {
     assert.match(source, /useI18n\(activeLocale\)/);

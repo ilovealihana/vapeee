@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { adminApi, type AdminCity, type AdminLocation } from '../../api/admin';
 import Icon from '../../components/Icon';
 import { useI18n } from '../../i18n';
@@ -12,6 +12,83 @@ type ConfirmAction = {
 };
 
 const emptyLocation = { name: '', address: '', description: '' };
+
+type GooglePlace = {
+  formatted_address?: string;
+  name?: string;
+};
+
+type GoogleAutocompleteListener = {
+  remove?: () => void;
+};
+
+type GooglePlacesAutocomplete = {
+  addListener: (eventName: 'place_changed', handler: () => void) => GoogleAutocompleteListener;
+  getPlace: () => GooglePlace;
+};
+
+type GooglePlacesAutocompleteCtor = new (
+  input: HTMLInputElement,
+  options: {
+    fields: Array<'formatted_address' | 'geometry' | 'name'>;
+    componentRestrictions: { country: 'pl' };
+  },
+) => GooglePlacesAutocomplete;
+
+type AdminGoogleWindow = Window & {
+  google?: {
+    maps?: {
+      places?: {
+        Autocomplete?: GooglePlacesAutocompleteCtor;
+      };
+      importLibrary?: (name: 'places') => Promise<{ Autocomplete?: GooglePlacesAutocompleteCtor }>;
+    };
+  };
+};
+
+function adminGoogleWindow(): AdminGoogleWindow | null {
+  if (typeof window === 'undefined') return null;
+  return window as AdminGoogleWindow;
+}
+
+function adminGoogleMapsKey(): string {
+  return import.meta.env.VITE_GOOGLE_MAPS_API_KEY ?? '';
+}
+
+function ensureGooglePlacesScript(): Promise<void> {
+  const win = adminGoogleWindow();
+  if (!win) return Promise.reject(new Error('window unavailable'));
+  if (win.google?.maps?.places?.Autocomplete) return Promise.resolve();
+  if (win.google?.maps?.importLibrary) {
+    return win.google.maps.importLibrary('places').then((library) => {
+      if (library.Autocomplete && win.google?.maps) {
+        win.google.maps.places = { ...win.google.maps.places, Autocomplete: library.Autocomplete };
+      }
+    });
+  }
+
+  const key = adminGoogleMapsKey();
+  if (!key) return Promise.reject(new Error('google maps key unavailable'));
+
+  const existing = document.querySelector<HTMLScriptElement>('script[data-google-maps-selector="true"]');
+  if (existing) {
+    return new Promise((resolve, reject) => {
+      existing.addEventListener('load', () => resolve(), { once: true });
+      existing.addEventListener('error', () => reject(new Error('google maps load failed')), { once: true });
+    });
+  }
+
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&libraries=places&v=weekly&loading=async`;
+    script.async = true;
+    script.defer = true;
+    script.dataset.googleMapsSelector = 'true';
+    script.addEventListener('load', () => resolve(), { once: true });
+    script.addEventListener('error', () => reject(new Error('google maps load failed')), { once: true });
+    document.head.appendChild(script);
+  });
+}
 
 export default function AdminCities() {
   const activeLocale = useUserStore((state) => state.activeLocale);
@@ -29,6 +106,7 @@ export default function AdminCities() {
   const [editLoc, setEditLoc] = useState<AdminLocation | null>(null);
   const [locForm, setLocForm] = useState(emptyLocation);
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
+  const locAddressInputRef = useRef<HTMLInputElement | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -41,6 +119,43 @@ export default function AdminCities() {
   };
 
   useEffect(() => { load(); }, []);
+
+  useEffect(() => {
+    if (!showLocModal) return undefined;
+    const input = locAddressInputRef.current;
+    if (!input) return undefined;
+
+    let cancelled = false;
+    let listener: GoogleAutocompleteListener | null = null;
+    ensureGooglePlacesScript()
+      .then(async () => {
+        const win = adminGoogleWindow();
+        if (!win?.google?.maps?.places?.Autocomplete && win?.google?.maps?.importLibrary) {
+          const library = await win.google.maps.importLibrary('places');
+          if (library.Autocomplete && win.google?.maps) {
+            win.google.maps.places = { ...win.google.maps.places, Autocomplete: library.Autocomplete };
+          }
+        }
+        if (cancelled) return;
+        const Autocomplete = adminGoogleWindow()?.google?.maps?.places?.Autocomplete;
+        if (!Autocomplete) return;
+        const autocomplete = new Autocomplete(input, {
+          fields: ['formatted_address', 'geometry', 'name'],
+          componentRestrictions: { country: 'pl' },
+        });
+        listener = autocomplete.addListener('place_changed', () => {
+          const place = autocomplete.getPlace();
+          const address = place.formatted_address || place.name || input.value;
+          setLocForm(f => ({ ...f, address }));
+        });
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+      listener?.remove?.();
+    };
+  }, [showLocModal]);
 
   const loadLocations = async (cityId: number) => {
     try {
@@ -245,7 +360,7 @@ export default function AdminCities() {
           footer={<button className="admin-button admin-button-primary" type="button" onClick={saveLoc}>{t('admin.common.save')}</button>}
         >
           <div className="input-group"><label className="input-label">{t('admin.fields.name')}</label><input className="input" value={locForm.name} onChange={e => setLocForm(f => ({ ...f, name: e.target.value }))} /></div>
-          <div className="input-group"><label className="input-label">{t('admin.fields.address')}</label><input className="input" value={locForm.address} onChange={e => setLocForm(f => ({ ...f, address: e.target.value }))} /></div>
+          <div className="input-group"><label className="input-label">{t('admin.fields.address')}</label><input className="input" ref={locAddressInputRef} value={locForm.address} onChange={e => setLocForm(f => ({ ...f, address: e.target.value }))} /></div>
           <div className="input-group"><label className="input-label">{t('admin.fields.description')}</label><input className="input" value={locForm.description} onChange={e => setLocForm(f => ({ ...f, description: e.target.value }))} /></div>
         </AdminModal>
       )}
