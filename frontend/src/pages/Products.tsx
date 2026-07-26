@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api, type Category, type Product } from '../api/client';
 import { formatApiError } from '../api/errors';
 import CopiedBottomNav from '../components/CopiedBottomNav';
@@ -10,6 +10,7 @@ import Icon from '../components/Icon';
 import ProductMedia from '../components/ProductMedia';
 import { useI18n } from '../i18n';
 import { useCartStore } from '../store/cart';
+import { findLocationSource, useCatalogSourceStore, type SelectedCatalog } from '../store/catalogSource';
 import { useUserStore } from '../store/user';
 
 function flavorLabel(count: number, t: (key: string) => string) {
@@ -26,17 +27,22 @@ function parseLocationId(value: string | undefined): number | undefined {
 
 export default function Products() {
   const navigate = useNavigate();
-  const { state } = useLocation();
   const { locationId: routeLocationId } = useParams<{ locationId: string }>();
   const [searchParams] = useSearchParams();
   const queryLocationId = searchParams.get('location_id') || undefined;
+  const querySource = searchParams.get('source') || undefined;
   const locationId = routeLocationId || queryLocationId;
   const numericLocationId = parseLocationId(locationId);
-  const returnCityId = (state as { cityId?: string } | null)?.cityId;
-  const backTarget = returnCityId ? `/cities/${returnCityId}/locations` : '/cities';
   const activeLocale = useUserStore((state) => state.activeLocale);
   const { t } = useI18n(activeLocale);
-  const { addItem, fetchCart, itemCount } = useCartStore();
+  const { addItem, fetchCart, itemCount, cart, clearCart } = useCartStore();
+  const {
+    sources,
+    selectedSource,
+    loading: sourcesLoading,
+    loadSources,
+    selectSource,
+  } = useCatalogSourceStore();
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [categoryId, setCategoryId] = useState<number | undefined>();
@@ -50,16 +56,41 @@ export default function Products() {
   }, []);
 
   useEffect(() => {
+    if (!sources && !sourcesLoading) loadSources();
+  }, [loadSources, sources, sourcesLoading]);
+
+  useEffect(() => {
+    if (!sources || selectedSource) return;
+    let target: SelectedCatalog | null = null;
+    if (numericLocationId) target = findLocationSource(sources, numericLocationId);
+    if (querySource === 'inpost') target = { type: 'inpost', status: sources.inpost.status };
+    if (!target || target.status !== 'available') {
+      navigate('/catalog-selector', { replace: true });
+      return;
+    }
+    if (cart?.items?.length) {
+      navigate('/catalog-selector', { replace: true });
+      return;
+    }
+    selectSource(target, cart, clearCart).catch(() => navigate('/catalog-selector', { replace: true }));
+  }, [cart, clearCart, navigate, numericLocationId, querySource, selectedSource, selectSource, sources]);
+
+  useEffect(() => {
+    if (!selectedSource) {
+      if (!sourcesLoading && sources) navigate('/catalog-selector', { replace: true });
+      return;
+    }
     setLoading(true);
     setError('');
     api.catalog.products({
       category_id: categoryId,
-      location_id: numericLocationId,
+      location_id: selectedSource.type === 'local_point' ? selectedSource.locationId : undefined,
+      source: selectedSource.type === 'inpost' ? 'inpost' : undefined,
     })
       .then(setProducts)
       .catch((e) => setError(formatApiError(e, t)))
       .finally(() => setLoading(false));
-  }, [categoryId, numericLocationId, t]);
+  }, [categoryId, navigate, selectedSource, sources, sourcesLoading, t]);
 
   const addProduct = async (product: Product) => {
     const variant = product.variants[0];
@@ -67,7 +98,16 @@ export default function Products() {
     setBusyProduct(product.id);
     setError('');
     try {
-      await addItem(variant.id, 1, numericLocationId);
+      if (!selectedSource) {
+        navigate('/catalog-selector', { replace: true });
+        return;
+      }
+      await addItem(
+        variant.id,
+        1,
+        selectedSource.type === 'local_point' ? selectedSource.locationId : undefined,
+        selectedSource.type,
+      );
       await fetchCart();
     } catch (e) {
       setError(formatApiError(e, t));
@@ -89,7 +129,7 @@ export default function Products() {
       <div className="copied-catalog-shell dark overflow-x-hidden" data-catalog-layout={layout}>
         <div className="relative z-10 flex flex-col min-h-screen w-full">
           <div className="catalog-filter-bar px-margin-page py-3 relative z-10">
-            <button className="back-btn" onClick={() => navigate(backTarget)} aria-label={t('common.back')}><Icon name="chevronLeft" /></button>
+            <button className="back-btn" onClick={() => navigate('/catalog-selector')} aria-label={t('catalogSelector.changeSource')}><Icon name="mapPin" /></button>
             <div className={`catalog-view-toggle ${layout === 'two' ? 'is-two' : 'is-three'}`} role="group" aria-label={t('catalog.viewToggle')}>
               <button
                 className={`catalog-view-option ${layout === 'two' ? 'is-active' : ''}`}
@@ -150,7 +190,14 @@ export default function Products() {
                     <article
                       key={product.id}
                       className="product-card flex flex-col bg-surface-container rounded-xl overflow-hidden group"
-                      onClick={() => navigate(`/products/${product.id}${locationId ? `?location_id=${locationId}` : ''}`, { state: { locationId } })}
+                      onClick={() => {
+                        const suffix = selectedSource?.type === 'local_point'
+                          ? `?location_id=${selectedSource.locationId}`
+                          : selectedSource?.type === 'inpost'
+                            ? '?source=inpost'
+                            : '';
+                        navigate(`/products/${product.id}${suffix}`);
+                      }}
                     >
                       <div className="relative w-full aspect-square bg-surface-container-low flex items-center justify-center p-4">
                         <ProductMedia label={product.name_ru.slice(0, 4).toUpperCase()} />

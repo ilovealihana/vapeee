@@ -6,6 +6,7 @@ import Icon from '../components/Icon';
 import ProductMedia from '../components/ProductMedia';
 import { useI18n } from '../i18n';
 import { useCartStore } from '../store/cart';
+import { findLocationSource, useCatalogSourceStore, type SelectedCatalog } from '../store/catalogSource';
 import { useUserStore } from '../store/user';
 
 function flavorLabel(count: number, t: (key: string) => string): string {
@@ -20,6 +21,7 @@ export default function ProductDetail() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const locationId = state?.locationId || searchParams.get('location_id') || undefined;
+  const querySource = searchParams.get('source') || undefined;
 
   const [product, setProduct] = useState<Product | null>(null);
   const [selectedVariant, setSelectedVariant] = useState<Variant | null>(null);
@@ -27,20 +29,55 @@ export default function ProductDetail() {
   const [adding, setAdding] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [addError, setAddError] = useState('');
-  const { addItem, fetchCart } = useCartStore();
+  const { addItem, fetchCart, cart, clearCart } = useCartStore();
+  const {
+    sources,
+    selectedSource,
+    loading: sourcesLoading,
+    loadSources,
+    selectSource,
+  } = useCatalogSourceStore();
   const activeLocale = useUserStore((state) => state.activeLocale);
   const { t } = useI18n(activeLocale);
   const lang = 'ru';
 
   useEffect(() => {
+    if (!sources && !sourcesLoading) loadSources();
+  }, [loadSources, sources, sourcesLoading]);
+
+  useEffect(() => {
+    if (!sources || selectedSource) return;
+    let target: SelectedCatalog | null = null;
+    const numericLocationId = locationId ? Number(locationId) : NaN;
+    if (Number.isFinite(numericLocationId)) target = findLocationSource(sources, numericLocationId);
+    if (querySource === 'inpost') target = { type: 'inpost', status: sources.inpost.status };
+    if (!target || target.status !== 'available') {
+      navigate('/catalog-selector', { replace: true });
+      return;
+    }
+    if (cart?.items?.length) {
+      navigate('/catalog-selector', { replace: true });
+      return;
+    }
+    selectSource(target, cart, clearCart).catch(() => navigate('/catalog-selector', { replace: true }));
+  }, [cart, clearCart, locationId, navigate, querySource, selectedSource, selectSource, sources]);
+
+  useEffect(() => {
     if (!productId) return;
-    api.catalog.product(Number(productId), locationId ? { location_id: Number(locationId) } : undefined)
+    if (!selectedSource) {
+      if (!sourcesLoading && sources) navigate('/catalog-selector', { replace: true });
+      return;
+    }
+    const requestParams = selectedSource.type === 'local_point'
+      ? { location_id: selectedSource.locationId }
+      : { source: 'inpost' as const };
+    api.catalog.product(Number(productId), requestParams)
       .then((p) => {
         setProduct(p);
         setSelectedVariant(p.variants[0] || null);
       })
       .catch((e) => setLoadError(formatApiError(e, t)));
-  }, [productId, locationId, t]);
+  }, [navigate, productId, selectedSource, sources, sourcesLoading, t]);
 
   if (loadError) {
     return (
@@ -67,7 +104,16 @@ export default function ProductDetail() {
     setAdding(true);
     setAddError('');
     try {
-      await addItem(selectedVariant.id, qty, locationId ? Number(locationId) : undefined);
+      if (!selectedSource) {
+        navigate('/catalog-selector', { replace: true });
+        return;
+      }
+      await addItem(
+        selectedVariant.id,
+        qty,
+        selectedSource.type === 'local_point' ? selectedSource.locationId : undefined,
+        selectedSource.type,
+      );
       await fetchCart();
       navigate('/cart');
     } catch (e: any) {

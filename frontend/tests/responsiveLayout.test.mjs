@@ -6,8 +6,7 @@ const css = readFileSync(new URL('../src/index.css', import.meta.url), 'utf8');
 const productsSource = readFileSync(new URL('../src/pages/Products.tsx', import.meta.url), 'utf8');
 const cartSource = readFileSync(new URL('../src/pages/Cart.tsx', import.meta.url), 'utf8');
 const profileSource = readFileSync(new URL('../src/pages/Profile.tsx', import.meta.url), 'utf8');
-const citiesSource = readFileSync(new URL('../src/pages/Cities.tsx', import.meta.url), 'utf8');
-const locationsSource = readFileSync(new URL('../src/pages/Locations.tsx', import.meta.url), 'utf8');
+const selectorSource = readFileSync(new URL('../src/pages/CatalogSelector.tsx', import.meta.url), 'utf8');
 const appSource = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
 
 test('copied mini app layout fills the viewport without side gutters', () => {
@@ -59,34 +58,28 @@ test('catalog filters stay in normal flow and do not overlap product cards', () 
   assert.match(productsSource, /<main className="[^"]*\bpt-2\b[^"]*"/);
 });
 
-test('catalog city and location selection keep the copied catalog shell', () => {
-  for (const source of [citiesSource, locationsSource]) {
-    assert.match(source, /CopiedSmokeBackground/);
-    assert.match(source, /CopiedTopBar/);
-    assert.match(source, /CopiedPageTitle activeTab="catalog"/);
-    assert.match(source, /CopiedBottomNav activeTab="catalog"/);
-    assert.match(source, /className="copied-catalog-shell dark overflow-x-hidden"/);
-    assert.doesNotMatch(source, /<div className="page">/);
-  }
+test('global catalog selector keeps the copied catalog shell', () => {
+  assert.match(selectorSource, /CopiedSmokeBackground/);
+  assert.match(selectorSource, /CopiedTopBar/);
+  assert.match(selectorSource, /CopiedPageTitle activeTab="catalog"/);
+  assert.match(selectorSource, /CopiedBottomNav activeTab="catalog"/);
+  assert.match(selectorSource, /className="copied-catalog-shell dark overflow-x-hidden"/);
+  assert.doesNotMatch(selectorSource, /<div className="page">/);
 
-  assert.match(appSource, /pathname === '\/cities'/);
-  assert.match(appSource, /pathname\.startsWith\('\/cities\/'\) && pathname\.endsWith\('\/locations'\)/);
+  assert.match(appSource, /pathname === '\/catalog-selector'/);
 });
 
-test('catalog root does not show a back arrow before a city is selected', () => {
-  assert.doesNotMatch(citiesSource, /className="back-btn"/);
-  assert.doesNotMatch(citiesSource, /navigate\('\/'\)/);
-  assert.match(locationsSource, /className="back-btn"/);
-  assert.match(locationsSource, /navigate\('\/cities'\)/);
+test('catalog selector uses one-open-city accordion instead of nested city routes', () => {
+  assert.match(selectorSource, /expandedCityId/);
+  assert.match(selectorSource, /setExpandedCityId\(expandedCityId === city\.id \? null : city\.id\)/);
+  assert.match(appSource, /path="\/cities" element=\{<Navigate to="\/catalog-selector" replace \/>\}/);
+  assert.match(appSource, /path="\/cities\/:cityId\/locations" element=\{<Navigate to="\/catalog-selector" replace \/>\}/);
 });
 
-test('selected location catalog has a back arrow to location selection', () => {
-  assert.match(locationsSource, /navigate\(`\/locations\/\$\{selected\.id\}\/products`, \{ state: \{ cityId \} \}\)/);
-  assert.match(productsSource, /useLocation/);
-  assert.match(productsSource, /const backTarget = returnCityId \? `\/cities\/\$\{returnCityId\}\/locations` : '\/cities';/);
-  assert.match(productsSource, /className="back-btn"/);
-  assert.match(productsSource, /onClick=\{\(\) => navigate\(backTarget\)\}/);
-  assert.match(productsSource, /<Icon name="chevronLeft" \/>/);
+test('selected catalog does not show old location-selection back arrow', () => {
+  assert.doesNotMatch(productsSource, /const backTarget = returnCityId/);
+  assert.doesNotMatch(productsSource, /onClick=\{\(\) => navigate\(backTarget\)\}/);
+  assert.match(productsSource, /navigate\('\/catalog-selector'\)/);
 });
 
 test('app scrolls to the top on route changes', () => {

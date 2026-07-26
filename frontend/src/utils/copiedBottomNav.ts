@@ -12,7 +12,7 @@ export const COPIED_PAGE_TITLES = {
 
 export const COPIED_BOTTOM_NAV_ITEMS = [
   { id: 'home', labelKey: 'nav.home', path: '/', icon: 'home' },
-  { id: 'catalog', labelKey: 'nav.catalog', path: '/cities', icon: 'grid_view' },
+  { id: 'catalog', labelKey: 'nav.catalog', path: '/products', icon: 'grid_view' },
   { id: 'cart', labelKey: 'nav.cart', path: '/cart', icon: 'shopping_cart' },
   { id: 'profile', labelKey: 'nav.profile', path: '/profile', icon: 'person' },
 ] as const;

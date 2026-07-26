@@ -2,10 +2,10 @@ import { useEffect } from 'react';
 import { BrowserRouter, Route, Routes, Navigate, useLocation } from 'react-router-dom';
 import { useUserStore } from './store/user';
 import { useCartStore } from './store/cart';
+import { useCatalogSourceStore } from './store/catalogSource';
 import BottomNav from './components/BottomNav';
 import Home from './pages/Home';
-import Cities from './pages/Cities';
-import Locations from './pages/Locations';
+import CatalogSelector from './pages/CatalogSelector';
 import Products from './pages/Products';
 import ProductDetail from './pages/ProductDetail';
 import Cart from './pages/Cart';
@@ -29,12 +29,20 @@ if (window.Telegram?.WebApp) {
 
 export default function App() {
   const { fetchUser } = useUserStore();
-  const { fetchCart } = useCartStore();
+  const { fetchCart, cart } = useCartStore();
+  const loadSources = useCatalogSourceStore((state) => state.loadSources);
+  const hydrateFromCart = useCatalogSourceStore((state) => state.hydrateFromCart);
+  const sources = useCatalogSourceStore((state) => state.sources);
 
   useEffect(() => {
     fetchUser();
     fetchCart();
+    loadSources();
   }, []);
+
+  useEffect(() => {
+    if (sources) hydrateFromCart(cart);
+  }, [cart, hydrateFromCart, sources]);
 
   return (
     <BrowserRouter>
@@ -42,8 +50,9 @@ export default function App() {
       <Routes>
         {/* User routes */}
         <Route path="/" element={<Home />} />
-        <Route path="/cities" element={<Cities />} />
-        <Route path="/cities/:cityId/locations" element={<Locations />} />
+        <Route path="/catalog-selector" element={<CatalogSelector />} />
+        <Route path="/cities" element={<Navigate to="/catalog-selector" replace />} />
+        <Route path="/cities/:cityId/locations" element={<Navigate to="/catalog-selector" replace />} />
         <Route path="/locations/:locationId/products" element={<Products />} />
         <Route path="/products" element={<Products />} />
         <Route path="/products/:productId" element={<ProductDetail />} />
@@ -86,11 +95,10 @@ function BottomNavConditional() {
   const { pathname } = useLocation();
   if (
     pathname === '/' ||
-    pathname === '/cities' ||
+    pathname === '/catalog-selector' ||
     pathname === '/products' ||
     pathname === '/cart' ||
     pathname === '/profile' ||
-    (pathname.startsWith('/cities/') && pathname.endsWith('/locations')) ||
     (pathname.startsWith('/locations/') && pathname.endsWith('/products')) ||
     pathname.startsWith('/admin')
   ) return null;

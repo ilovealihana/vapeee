@@ -146,22 +146,22 @@ test('customer copied pages use i18n keys and real cart/catalog flows', async ()
     assert.match(source, /useUserStore\(\(state\) => state\.activeLocale\)/);
   }
 
-  assert.match(sources[0], /useMemo\(\(\) => build\w+Markup\(t\), \[t\]\)/);
+  assert.match(sources[0], /useCatalogSourceStore/);
   assert.match(sources[3], /buildProfileMarkup\(\{[\s\S]*t,[\s\S]*user,[\s\S]*orders,[\s\S]*hasAdminAccess,[\s\S]*activeLocale/);
   assert.match(sources[3], /activeProfileTab,[\s\S]*editingContactField,[\s\S]*contactSavingField,[\s\S]*contactError/);
   assert.match(sources[0], /t\('home\.greeting'\)/);
   assert.match(sources[0], /t\('home\.popular'\)/);
-  assert.match(sources[0], /data-home-action="catalog"/);
-  assert.match(sources[0], /role="button" tabindex="0" data-home-action="catalog"/);
-  assert.match(sources[0], /addEventListener\('keydown', onHomeKeydown\)/);
-  assert.match(sources[0], /navigate\('\/cities'\)/);
-  assert.doesNotMatch(sources[0], /<button class="[^"]*active-scale[^"]*" type="button" data-home-action="catalog">/);
+  assert.match(sources[0], /selectedSource \? '\/products' : '\/catalog-selector'/);
+  assert.match(sources[0], /navigate\('\/catalog-selector'\)/);
+  assert.match(sources[0], /t\('catalogSelector\.homeSelectSourcePrompt'\)/);
+  assert.doesNotMatch(sources[0], /navigate\('\/cities'\)/);
   assert.match(sources[1], /t\('catalog\.viewToggle'\)/);
   assert.match(sources[1], /useParams<\{ locationId: string \}>\(\)/);
   assert.match(sources[1], /const locationId = routeLocationId \|\| queryLocationId/);
-  assert.match(sources[1], /location_id: numericLocationId/);
+  assert.match(sources[1], /location_id: selectedSource\.type === 'local_point' \? selectedSource\.locationId : undefined/);
+  assert.match(sources[1], /source: selectedSource\.type === 'inpost' \? 'inpost' : undefined/);
   assert.match(sources[1], /api\.catalog\.products/);
-  assert.match(sources[1], /await addItem\(variant\.id,\s*1,\s*numericLocationId\)/);
+  assert.match(sources[1], /await addItem\([\s\S]*variant\.id,[\s\S]*selectedSource\.type,[\s\S]*\);/);
   assert.match(sources[1], /t\('product\.add'\)/);
   assert.match(sources[2], /t\('cart\.total'\)/);
   assert.match(sources[2], /t\('cart\.checkout'\)/);
@@ -197,7 +197,7 @@ test('customer React page i18n keys resolve to ru strings', async () => {
       for (const match of source.matchAll(/\bt\('([^']+)'\)/g)) {
         keys.add(match[1]);
       }
-      for (const match of source.matchAll(/['"]((?:common|nav|home|catalog|cart|checkout|cities|locations|productDetail|orderSuccess|product|profile|admin|errors|validation)\.[^'"]+)['"]/g)) {
+      for (const match of source.matchAll(/['"]((?:common|nav|home|catalog|catalogSelector|cart|checkout|cities|locations|productDetail|orderSuccess|product|profile|admin|errors|validation)\.[^'"]+)['"]/g)) {
         keys.add(match[1]);
       }
     }
