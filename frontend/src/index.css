@@ -678,13 +678,21 @@ body {
 }
 
 .google-map-selector-canvas {
+  position: relative;
   display: grid;
   place-items: center;
   color: #a4a4a6;
   font-size: 13px;
 }
 
+.google-map-selector-map {
+  position: absolute;
+  inset: 0;
+}
+
 .google-map-selector-loading {
+  position: relative;
+  z-index: 1;
   display: inline-grid;
   justify-items: center;
   gap: 8px;

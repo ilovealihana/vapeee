@@ -190,7 +190,8 @@ export default function GoogleMapSelector({ cities, onSelectLocation }: GoogleMa
 
   return (
     <section className="google-map-selector">
-      <div className="google-map-selector-canvas" ref={mapRef}>
+      <div className="google-map-selector-canvas">
+        <div className="google-map-selector-map" ref={mapRef} />
         {mapState === 'loading' && (
           <span className="google-map-selector-loading">
             <Icon name="mapPin" size={24} />

@@ -35,6 +35,12 @@ test('google map selector fails visibly instead of staying on a blank loading ca
   assert.match(componentSource, /Promise\.race/);
 });
 
+test('google map selector keeps React loading UI outside the Google-mutated map node', () => {
+  assert.match(componentSource, /className="google-map-selector-map" ref=\{mapRef\}/);
+  assert.doesNotMatch(componentSource, /className="google-map-selector-canvas" ref=\{mapRef\}>\s*\{mapState === 'loading'/);
+  assert.match(css, /\.google-map-selector-map/);
+});
+
 test('catalog selector delegates map tab rendering to GoogleMapSelector', () => {
   assert.match(selectorSource, /import GoogleMapSelector from '\.\.\/components\/GoogleMapSelector';/);
   assert.match(selectorSource, /<GoogleMapSelector/);
