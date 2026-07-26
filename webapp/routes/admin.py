@@ -3,11 +3,12 @@ from __future__ import annotations
 
 import re
 from fastapi import APIRouter, Depends
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from db.models.city import City
+from db.models.cart import Cart
 from db.models.location import Location
 from db.models.location_stock import LocationStock
 from db.models.order import Order
@@ -69,6 +70,16 @@ from webapp.schemas import (
 )
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
+
+
+async def _clear_location_delete_dependencies(session: AsyncSession, location_ids: list[int]) -> None:
+    if not location_ids:
+        return
+    await session.execute(update(Cart).where(Cart.location_id.in_(location_ids)).values(location_id=None))
+    await session.execute(update(Order).where(Order.location_id.in_(location_ids)).values(location_id=None))
+    await session.execute(delete(ProductRequest).where(ProductRequest.location_id.in_(location_ids)))
+    await session.execute(delete(StaffAssignment).where(StaffAssignment.location_id.in_(location_ids)))
+    await session.execute(delete(LocationStock).where(LocationStock.location_id.in_(location_ids)))
 
 
 # Staff
@@ -808,6 +819,13 @@ async def admin_delete_city(
     city = result.scalar_one_or_none()
     if not city:
         raise api_error(404, ErrorCode.ADMIN_CITY_NOT_FOUND, "City not found")
+    location_ids = (
+        await session.execute(select(Location.id).where(Location.city_id == city_id))
+    ).scalars().all()
+    await _clear_location_delete_dependencies(session, list(location_ids))
+    await session.execute(delete(ProductRequest).where(ProductRequest.city_id == city_id))
+    await session.execute(delete(StaffAssignment).where(StaffAssignment.city_id == city_id))
+    await session.execute(delete(Location).where(Location.city_id == city_id))
     await session.execute(delete(City).where(City.id == city_id))
     await session.commit()
 
@@ -882,6 +900,7 @@ async def admin_delete_location(
     loc = result.scalar_one_or_none()
     if not loc:
         raise api_error(404, ErrorCode.ADMIN_LOCATION_NOT_FOUND, "Location not found")
+    await _clear_location_delete_dependencies(session, [location_id])
     await session.execute(delete(Location).where(Location.id == location_id))
     await session.commit()
 
