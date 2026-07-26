@@ -35,6 +35,11 @@ test('google map selector fails visibly instead of staying on a blank loading ca
   assert.match(componentSource, /Promise\.race/);
 });
 
+test('google map selector does not use async script loading without a callback', () => {
+  assert.match(componentSource, /maps\.googleapis\.com\/maps\/api\/js\?key=/);
+  assert.doesNotMatch(componentSource, /loading=async/);
+});
+
 test('google map selector keeps React loading UI outside the Google-mutated map node', () => {
   assert.match(componentSource, /className="google-map-selector-map" ref=\{mapRef\}/);
   assert.doesNotMatch(componentSource, /className="google-map-selector-canvas" ref=\{mapRef\}>\s*\{mapState === 'loading'/);

@@ -228,6 +228,7 @@ test('admin location form uses Google Places autocomplete for address suggestion
   assert.match(citiesSource, /locAddressInputRef/);
   assert.match(citiesSource, /VITE_GOOGLE_MAPS_API_KEY/);
   assert.match(citiesSource, /libraries=places/);
+  assert.doesNotMatch(citiesSource, /loading=async/);
   assert.match(citiesSource, /maps\?\.places\?\.Autocomplete/);
   assert.match(citiesSource, /componentRestrictions:\s*\{\s*country:\s*'pl'\s*\}/);
   assert.match(citiesSource, /fields:\s*\['formatted_address', 'geometry', 'name'\]/);
