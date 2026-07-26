@@ -6,10 +6,12 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 import db.models  # noqa: F401 - register model metadata
 from db.models.city import City
+from db.models.cart import Cart
 from db.models.location import Location
 from db.models.product import Product
 from db.models.product_request import ProductRequest
 from db.models.product_variant import ProductVariant
+from db.models.user import User
 from db.session import Base
 from webapp.routes.admin import admin_delete_city, admin_delete_location
 
@@ -94,6 +96,22 @@ class AdminDeleteContractTest(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(city)
         self.assertIsNone(location)
         self.assertEqual(requests, [])
+
+    async def test_delete_location_clears_local_point_cart_source(self):
+        async with self.session_maker() as session:
+            _, location_id, _ = await self._city_with_requested_location(session)
+            user = User(tg_id=10101, first_name="User", language="ru")
+            session.add(user)
+            await session.flush()
+            cart = Cart(user_id=user.id, location_id=location_id, source_type="local_point")
+            session.add(cart)
+            await session.commit()
+
+            await admin_delete_location(location_id, _=object(), session=session)
+            await session.refresh(cart)
+
+        self.assertIsNone(cart.location_id)
+        self.assertIsNone(cart.source_type)
 
 
 if __name__ == "__main__":

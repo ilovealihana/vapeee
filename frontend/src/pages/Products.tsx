@@ -10,7 +10,12 @@ import Icon from '../components/Icon';
 import ProductMedia from '../components/ProductMedia';
 import { useI18n } from '../i18n';
 import { useCartStore } from '../store/cart';
-import { findLocationSource, useCatalogSourceStore, type SelectedCatalog } from '../store/catalogSource';
+import {
+  findLocationSource,
+  isSameCatalogSource,
+  useCatalogSourceStore,
+  type SelectedCatalog,
+} from '../store/catalogSource';
 import { useUserStore } from '../store/user';
 
 function flavorLabel(count: number, t: (key: string) => string) {
@@ -60,10 +65,12 @@ export default function Products() {
   }, [loadSources, sources, sourcesLoading]);
 
   useEffect(() => {
-    if (!sources || selectedSource) return;
+    if (!sources) return;
     let target: SelectedCatalog | null = null;
     if (numericLocationId) target = findLocationSource(sources, numericLocationId);
     if (querySource === 'inpost') target = { type: 'inpost', status: sources.inpost.status };
+    if (!target) return;
+    if (isSameCatalogSource(target, selectedSource)) return;
     if (!target || target.status !== 'available') {
       navigate('/catalog-selector', { replace: true });
       return;
@@ -76,7 +83,14 @@ export default function Products() {
   }, [cart, clearCart, navigate, numericLocationId, querySource, selectedSource, selectSource, sources]);
 
   useEffect(() => {
-    if (!selectedSource) {
+    let sourceForRequest = selectedSource;
+    if (sources && (numericLocationId || querySource === 'inpost')) {
+      const urlSource = numericLocationId
+        ? findLocationSource(sources, numericLocationId)
+        : { type: 'inpost' as const, status: sources.inpost.status };
+      if (urlSource && urlSource.status === 'available') sourceForRequest = urlSource;
+    }
+    if (!sourceForRequest) {
       if (!sourcesLoading && sources) navigate('/catalog-selector', { replace: true });
       return;
     }
@@ -84,13 +98,13 @@ export default function Products() {
     setError('');
     api.catalog.products({
       category_id: categoryId,
-      location_id: selectedSource.type === 'local_point' ? selectedSource.locationId : undefined,
-      source: selectedSource.type === 'inpost' ? 'inpost' : undefined,
+      location_id: sourceForRequest.type === 'local_point' ? sourceForRequest.locationId : undefined,
+      source: sourceForRequest.type === 'inpost' ? 'inpost' : undefined,
     })
       .then(setProducts)
       .catch((e) => setError(formatApiError(e, t)))
       .finally(() => setLoading(false));
-  }, [categoryId, navigate, selectedSource, sources, sourcesLoading, t]);
+  }, [categoryId, navigate, numericLocationId, querySource, selectedSource, sources, sourcesLoading, t]);
 
   const addProduct = async (product: Product) => {
     const variant = product.variants[0];

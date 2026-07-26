@@ -8,6 +8,9 @@ const productsSource = readSource('../src/pages/Products.tsx');
 const productDetailSource = readSource('../src/pages/ProductDetail.tsx');
 const selectorSource = readSource('../src/pages/CatalogSelector.tsx');
 const catalogSourceStoreSource = readSource('../src/store/catalogSource.ts');
+const cartSource = readSource('../src/pages/Cart.tsx');
+const checkoutSource = readSource('../src/pages/Checkout.tsx');
+const bottomNavSource = readSource('../src/components/BottomNav.tsx');
 const css = readSource('../src/index.css');
 
 test('customer routes use the global catalog selector entry point', () => {
@@ -48,12 +51,28 @@ test('selector screen renders in copied catalog shell with list and map tabs', (
 test('products and product detail load by selected catalog source', () => {
   assert.match(productsSource, /useCatalogSourceStore/);
   assert.match(productsSource, /navigate\('\/catalog-selector', \{ replace: true \}\)/);
-  assert.match(productsSource, /api\.catalog\.products\(\{[\s\S]*location_id: selectedSource\.type === 'local_point'/);
-  assert.match(productsSource, /source: selectedSource\.type === 'inpost' \? 'inpost' : undefined/);
+  assert.match(productsSource, /api\.catalog\.products\(\{[\s\S]*location_id: sourceForRequest\.type === 'local_point'/);
+  assert.match(productsSource, /source: sourceForRequest\.type === 'inpost' \? 'inpost' : undefined/);
   assert.match(productsSource, /addItem\([\s\S]*variant\.id,[\s\S]*selectedSource\.type === 'local_point' \? selectedSource\.locationId : undefined,[\s\S]*selectedSource\.type,[\s\S]*\);/);
   assert.match(productDetailSource, /useCatalogSourceStore/);
   assert.match(productDetailSource, /api\.catalog\.product\(Number\(productId\), requestParams\)/);
   assert.match(productDetailSource, /addItem\([\s\S]*selectedVariant\.id,[\s\S]*qty,[\s\S]*selectedSource\.type === 'local_point' \? selectedSource\.locationId : undefined,[\s\S]*selectedSource\.type,[\s\S]*\);/);
+  assert.match(productsSource, /isSameCatalogSource\(target, selectedSource\)/);
+  assert.match(productDetailSource, /isSameCatalogSource\(target, selectedSource\)/);
+  assert.match(productsSource, /const urlSource = numericLocationId[\s\S]*findLocationSource\(sources, numericLocationId\)/);
+  assert.match(productDetailSource, /const urlSource = Number\.isFinite\(numericLocationId\)[\s\S]*findLocationSource\(sources, numericLocationId\)/);
+});
+
+test('cart and checkout block unavailable source states before order creation', () => {
+  assert.match(bottomNavSource, /\{ path: '\/products', icon: 'catalog'/);
+  assert.match(cartSource, /inactiveItems/);
+  assert.match(cartSource, /checkoutBlocked/);
+  assert.match(cartSource, /disabled=\{checkoutBlocked\}/);
+  assert.match(cartSource, /cart\.availability\.inpostUnavailable/);
+  assert.match(checkoutSource, /checkoutBlocked/);
+  assert.match(checkoutSource, /source_type: 'local_point'/);
+  assert.match(checkoutSource, /checkout\.source\.inpostUnavailable/);
+  assert.match(checkoutSource, /cart\.source\?\.type === 'local_point'/);
 });
 
 test('selector styles use full-screen copied layout and disabled states', () => {

@@ -61,6 +61,10 @@ export default function Checkout() {
   }, [fetchUser, user]);
 
   useEffect(() => {
+    void fetchCart();
+  }, [fetchCart]);
+
+  useEffect(() => {
     if (contactDefaultsApplied.current) return;
     if (!user) return;
     contactDefaultsApplied.current = true;
@@ -107,8 +111,22 @@ export default function Checkout() {
     }
     setForm((f) => ({ ...f, [k]: v }));
   };
+  const inactiveItems = cart?.items?.filter((item) => item.availability && !item.availability.active) ?? [];
+  const sourceBlocked = !!cart?.source && cart.source.status !== 'available';
+  const inpostBlocked = cart?.source?.type === 'inpost';
+  const checkoutBlocked = inactiveItems.length > 0 || sourceBlocked || inpostBlocked || cart?.source?.type !== 'local_point';
+  const checkoutBlockedText = inpostBlocked
+    ? t('checkout.source.inpostUnavailable')
+    : sourceBlocked
+      ? t('checkout.source.unavailable')
+      : inactiveItems.length > 0
+        ? t('checkout.source.inactiveItems')
+        : cart?.source?.type !== 'local_point'
+          ? t('checkout.source.selectCatalog')
+          : '';
 
   const canNext = () => {
+    if (checkoutBlocked) return false;
     if (step === 0) return !!form.delivery_type;
     if (step === 1) return form.customer_name && form.customer_phone && form.customer_email && (form.delivery_type !== 'door_delivery' || form.delivery_address);
     if (step === 2) return form.scheduled_date && form.scheduled_time;
@@ -118,6 +136,10 @@ export default function Checkout() {
 
   const handleSubmit = async () => {
     if (!cart) return;
+    if (checkoutBlocked) {
+      setError(checkoutBlockedText);
+      return;
+    }
     setSubmitting(true);
     setError('');
     try {
@@ -127,7 +149,8 @@ export default function Checkout() {
         customer_phone: form.customer_phone,
         customer_email: form.customer_email,
         delivery_address: form.delivery_type === 'door_delivery' ? form.delivery_address : undefined,
-        location_id: cart.location_id || undefined,
+        source_type: 'local_point',
+        location_id: cart.source?.type === 'local_point' ? cart.source.location_id || undefined : undefined,
         scheduled_date: form.scheduled_date,
         scheduled_time: form.scheduled_time,
         payment_method: form.payment_method,
@@ -159,6 +182,16 @@ export default function Checkout() {
       <div className="steps">{STEPS.map((_, i) => <div key={i} className={`step-dot ${i === step ? 'active' : i < step ? 'done' : ''}`} />)}</div>
 
       <div className="container">
+        {checkoutBlockedText && (
+          <div className="card" style={{ marginTop: 18, borderColor: 'var(--danger)' }}>
+            <strong>{t('checkout.source.blockedTitle')}</strong>
+            <p className="muted" style={{ marginTop: 6 }}>{checkoutBlockedText}</p>
+            <button className="btn btn-secondary" style={{ marginTop: 14 }} type="button" onClick={() => navigate('/cart')}>
+              {t('checkout.source.backToCart')}
+            </button>
+          </div>
+        )}
+
         {step === 0 && (
           <div style={{ display: 'grid', gap: 12, marginTop: 18 }}>
             {[

@@ -148,6 +148,24 @@ class CartSourceContractTest(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(cart.source.location_id)
         self.assertEqual(cart.items[0].availability.active, True)
 
+    async def test_explicit_local_point_source_requires_location(self):
+        async with self.session_maker() as session:
+            seeded = await self._seed(session)
+
+            with self.assertRaises(ApiError) as raised:
+                await cart_routes.add_item(
+                    AddCartItemRequest(
+                        variant_id=seeded["local_variant_id"],
+                        quantity=1,
+                        source_type="local_point",
+                    ),
+                    user=seeded["user"],
+                    session=session,
+                )
+
+        self.assertEqual(raised.exception.status_code, 400)
+        self.assertEqual(raised.exception.code, ErrorCode.CART_SOURCE_MISMATCH)
+
     async def test_cart_rejects_mixed_sources(self):
         async with self.session_maker() as session:
             seeded = await self._seed(session)

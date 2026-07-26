@@ -193,3 +193,25 @@ test('clear cart failure keeps current source', async () => {
     await cleanup();
   }
 });
+
+test('same source switch does not clear a non-empty cart', async () => {
+  const { module, cleanup } = await importCatalogSourceModule();
+  try {
+    let clearCalls = 0;
+    const current = module.sourceFromApiLocation(sources.cities[0].locations[0]);
+    const result = await module.applySourceSwitch({
+      target: current,
+      current,
+      cart: { source: { type: 'local_point', location_id: 10, status: 'available' }, items: [{ id: 1 }] },
+      clearCart: async () => {
+        clearCalls += 1;
+      },
+      storage: memoryStorage(),
+    });
+
+    assert.equal(clearCalls, 0);
+    assert.deepEqual(result, current);
+  } finally {
+    await cleanup();
+  }
+});

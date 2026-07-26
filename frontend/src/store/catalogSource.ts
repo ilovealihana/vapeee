@@ -73,6 +73,12 @@ export function validateSelectedSource(
   return findLocationSource(sources, source.locationId);
 }
 
+export function isSameCatalogSource(a: SelectedCatalog | null, b: SelectedCatalog | null): boolean {
+  if (!a || !b || a.type !== b.type) return false;
+  if (a.type === 'inpost') return true;
+  return b.type === 'local_point' && a.locationId === b.locationId;
+}
+
 export function selectedSourceFromCart(
   cart: Cart | null,
   sources: CatalogSources | null,
@@ -148,6 +154,10 @@ export async function applySourceSwitch({
 }): Promise<SelectedCatalog> {
   if (target.status !== 'available') {
     throw new Error('Catalog source is unavailable');
+  }
+  if (isSameCatalogSource(target, current)) {
+    writeStoredSource(target, storage);
+    return target;
   }
   if (cart?.items?.length) {
     await clearCart();

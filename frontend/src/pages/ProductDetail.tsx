@@ -6,7 +6,12 @@ import Icon from '../components/Icon';
 import ProductMedia from '../components/ProductMedia';
 import { useI18n } from '../i18n';
 import { useCartStore } from '../store/cart';
-import { findLocationSource, useCatalogSourceStore, type SelectedCatalog } from '../store/catalogSource';
+import {
+  findLocationSource,
+  isSameCatalogSource,
+  useCatalogSourceStore,
+  type SelectedCatalog,
+} from '../store/catalogSource';
 import { useUserStore } from '../store/user';
 
 function flavorLabel(count: number, t: (key: string) => string): string {
@@ -46,11 +51,13 @@ export default function ProductDetail() {
   }, [loadSources, sources, sourcesLoading]);
 
   useEffect(() => {
-    if (!sources || selectedSource) return;
+    if (!sources) return;
     let target: SelectedCatalog | null = null;
     const numericLocationId = locationId ? Number(locationId) : NaN;
     if (Number.isFinite(numericLocationId)) target = findLocationSource(sources, numericLocationId);
     if (querySource === 'inpost') target = { type: 'inpost', status: sources.inpost.status };
+    if (!target) return;
+    if (isSameCatalogSource(target, selectedSource)) return;
     if (!target || target.status !== 'available') {
       navigate('/catalog-selector', { replace: true });
       return;
@@ -64,12 +71,20 @@ export default function ProductDetail() {
 
   useEffect(() => {
     if (!productId) return;
-    if (!selectedSource) {
+    let sourceForRequest = selectedSource;
+    if (sources && (locationId || querySource === 'inpost')) {
+      const numericLocationId = locationId ? Number(locationId) : NaN;
+      const urlSource = Number.isFinite(numericLocationId)
+        ? findLocationSource(sources, numericLocationId)
+        : { type: 'inpost' as const, status: sources.inpost.status };
+      if (urlSource && urlSource.status === 'available') sourceForRequest = urlSource;
+    }
+    if (!sourceForRequest) {
       if (!sourcesLoading && sources) navigate('/catalog-selector', { replace: true });
       return;
     }
-    const requestParams = selectedSource.type === 'local_point'
-      ? { location_id: selectedSource.locationId }
+    const requestParams = sourceForRequest.type === 'local_point'
+      ? { location_id: sourceForRequest.locationId }
       : { source: 'inpost' as const };
     api.catalog.product(Number(productId), requestParams)
       .then((p) => {
@@ -77,7 +92,7 @@ export default function ProductDetail() {
         setSelectedVariant(p.variants[0] || null);
       })
       .catch((e) => setLoadError(formatApiError(e, t)));
-  }, [navigate, productId, selectedSource, sources, sourcesLoading, t]);
+  }, [locationId, navigate, productId, querySource, selectedSource, sources, sourcesLoading, t]);
 
   if (loadError) {
     return (

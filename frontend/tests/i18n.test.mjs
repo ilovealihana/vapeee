@@ -158,8 +158,8 @@ test('customer copied pages use i18n keys and real cart/catalog flows', async ()
   assert.match(sources[1], /t\('catalog\.viewToggle'\)/);
   assert.match(sources[1], /useParams<\{ locationId: string \}>\(\)/);
   assert.match(sources[1], /const locationId = routeLocationId \|\| queryLocationId/);
-  assert.match(sources[1], /location_id: selectedSource\.type === 'local_point' \? selectedSource\.locationId : undefined/);
-  assert.match(sources[1], /source: selectedSource\.type === 'inpost' \? 'inpost' : undefined/);
+  assert.match(sources[1], /location_id: sourceForRequest\.type === 'local_point' \? sourceForRequest\.locationId : undefined/);
+  assert.match(sources[1], /source: sourceForRequest\.type === 'inpost' \? 'inpost' : undefined/);
   assert.match(sources[1], /api\.catalog\.products/);
   assert.match(sources[1], /await addItem\([\s\S]*variant\.id,[\s\S]*selectedSource\.type,[\s\S]*\);/);
   assert.match(sources[1], /t\('product\.add'\)/);

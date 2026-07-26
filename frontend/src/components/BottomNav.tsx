@@ -6,7 +6,7 @@ import Icon from './Icon';
 
 const tabs = [
   { path: '/', icon: 'home' as const, labelKey: 'nav.home' },
-  { path: '/cities', icon: 'catalog' as const, labelKey: 'nav.catalog' },
+  { path: '/products', icon: 'catalog' as const, labelKey: 'nav.catalog' },
   { path: '/cart', icon: 'cart' as const, labelKey: 'nav.cart' },
   { path: '/profile', icon: 'profile' as const, labelKey: 'nav.profile' },
 ];

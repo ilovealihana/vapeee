@@ -131,6 +131,10 @@ async def create_order(
 
     cart_source_type = _cart_source_type(cart)
     requested_source_type = body.source_type or cart_source_type
+    if requested_source_type not in (SOURCE_LOCAL_POINT, SOURCE_INPOST):
+        if body.source_type:
+            raise api_error(400, ErrorCode.CATALOG_SOURCE_INVALID, "Catalog source invalid")
+        raise api_error(400, ErrorCode.ORDER_LOCATION_REQUIRED, "Location is required")
     if body.delivery_type == "inpost" or requested_source_type == SOURCE_INPOST:
         raise api_error(501, ErrorCode.ORDER_INPOST_UNAVAILABLE, "InPost checkout unavailable")
     if cart_source_type and requested_source_type and cart_source_type != requested_source_type:

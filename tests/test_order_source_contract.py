@@ -8,6 +8,8 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 import db.models  # noqa: F401
 from db.models.city import City
+from db.models.cart import Cart
+from db.models.cart_item import CartItem
 from db.models.inpost_stock import InpostStock
 from db.models.location import Location
 from db.models.location_stock import LocationStock
@@ -184,6 +186,44 @@ class OrderSourceContractTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(raised.exception.status_code, 501)
         self.assertEqual(raised.exception.code, ErrorCode.ORDER_INPOST_UNAVAILABLE)
+
+    async def test_checkout_rejects_legacy_cart_without_source_or_location(self):
+        async with self.session_maker() as session:
+            seeded = await self._seed(session)
+            cart = Cart(user_id=seeded["user"].id, source_type=None, location_id=None)
+            session.add(cart)
+            await session.flush()
+            session.add(CartItem(cart_id=cart.id, variant_id=seeded["local_variant_id"], quantity=1))
+            await session.commit()
+
+            with self.assertRaises(ApiError) as raised:
+                await order_routes.create_order(
+                    self._order_body(),
+                    user=seeded["user"],
+                    session=session,
+                )
+
+        self.assertEqual(raised.exception.status_code, 400)
+        self.assertEqual(raised.exception.code, ErrorCode.ORDER_LOCATION_REQUIRED)
+
+    async def test_checkout_rejects_unknown_source_type(self):
+        async with self.session_maker() as session:
+            seeded = await self._seed(session)
+            cart = Cart(user_id=seeded["user"].id, source_type=None, location_id=None)
+            session.add(cart)
+            await session.flush()
+            session.add(CartItem(cart_id=cart.id, variant_id=seeded["local_variant_id"], quantity=1))
+            await session.commit()
+
+            with self.assertRaises(ApiError) as raised:
+                await order_routes.create_order(
+                    self._order_body(source_type="bogus"),
+                    user=seeded["user"],
+                    session=session,
+                )
+
+        self.assertEqual(raised.exception.status_code, 400)
+        self.assertEqual(raised.exception.code, ErrorCode.CATALOG_SOURCE_INVALID)
 
 
 if __name__ == "__main__":

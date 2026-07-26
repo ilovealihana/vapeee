@@ -19,6 +19,14 @@ function itemSubtitle(item: NonNullable<ReturnType<typeof useCartStore.getState>
   return '';
 }
 
+function availabilityKey(reason?: string | null) {
+  if (reason === 'source_unavailable') return 'cart.availability.sourceUnavailable';
+  if (reason === 'product_unavailable') return 'cart.availability.productUnavailable';
+  if (reason === 'variant_unavailable') return 'cart.availability.variantUnavailable';
+  if (reason === 'insufficient_stock') return 'cart.availability.insufficientStock';
+  return 'cart.availability.unavailable';
+}
+
 export default function Cart() {
   const navigate = useNavigate();
   const activeLocale = useUserStore((state) => state.activeLocale);
@@ -47,6 +55,17 @@ export default function Cart() {
   const items = cart?.items ?? [];
   const total = Number(cart?.total || 0);
   const displayError = actionError || (cartError ? formatApiError(cartError, t) : '');
+  const inactiveItems = items.filter((item) => item.availability && !item.availability.active);
+  const sourceBlocked = !!cart?.source && cart.source.status !== 'available';
+  const inpostBlocked = cart?.source?.type === 'inpost';
+  const checkoutBlocked = inactiveItems.length > 0 || sourceBlocked || inpostBlocked;
+  const checkoutBlockedText = inpostBlocked
+    ? t('cart.availability.inpostUnavailable')
+    : sourceBlocked
+      ? t('cart.availability.sourceUnavailable')
+      : inactiveItems.length > 0
+        ? t('cart.availability.checkoutBlocked')
+        : '';
 
   return (
     <>
@@ -84,14 +103,20 @@ export default function Cart() {
                 {items.map((item) => {
                   const price = Number(item.price || item.product?.base_price || 0);
                   const disabled = busyItem === item.id;
+                  const inactive = item.availability && !item.availability.active;
 
                   return (
-                    <div key={item.id} className="cart-card p-4 rounded-xl flex items-center gap-4 border border-outline-variant/10">
+                    <div key={item.id} className="cart-card p-4 rounded-xl flex items-center gap-4 border border-outline-variant/10" data-inactive={inactive ? 'true' : undefined}>
                       <ProductMedia compact label={itemTitle(item).slice(0, 4).toUpperCase()} />
                       <div className="flex-1">
                         <h3 className="text-label-lg font-label-lg text-on-surface">{itemTitle(item)}</h3>
                         {itemSubtitle(item) && <p className="text-label-sm font-label-sm text-on-surface-variant">{itemSubtitle(item)}</p>}
                         <p className="text-label-lg font-label-lg text-primary mt-1">{price.toFixed(2)} zl</p>
+                        {inactive && (
+                          <p className="text-label-sm font-label-sm text-error mt-1">
+                            {t(availabilityKey(item.availability?.reason))}
+                          </p>
+                        )}
                       </div>
                       <div className="flex items-center bg-surface-container rounded-full px-2 py-1 gap-3">
                         <button
@@ -107,7 +132,7 @@ export default function Cart() {
                         <button
                           className="w-6 h-6 flex items-center justify-center text-on-surface-variant hover:text-on-surface"
                           type="button"
-                          disabled={disabled}
+                          disabled={disabled || !!inactive}
                           onClick={() => changeQuantity(item.id, item.quantity + 1)}
                           aria-label={t('product.add')}
                         >
@@ -125,9 +150,11 @@ export default function Cart() {
                   <span className="text-headline-sm font-headline-sm text-primary">{total.toFixed(2)} zl</span>
                 </div>
                 {displayError && <p style={{ color: 'var(--danger)', marginBottom: 12 }}>{displayError}</p>}
+                {checkoutBlockedText && <p style={{ color: 'var(--danger)', marginBottom: 12 }}>{checkoutBlockedText}</p>}
                 <button
                   className="w-full bg-primary text-on-primary py-4 rounded-xl font-headline-sm flex justify-center items-center gap-2 active:scale-95 transition-transform duration-150"
                   type="button"
+                  disabled={checkoutBlocked}
                   onClick={() => navigate('/checkout')}
                 >
                   <span>{t('cart.checkout')}</span>

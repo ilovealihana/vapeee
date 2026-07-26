@@ -109,7 +109,11 @@ async def _geocode_admin_location_address(address: str):
 async def _clear_location_delete_dependencies(session: AsyncSession, location_ids: list[int]) -> None:
     if not location_ids:
         return
-    await session.execute(update(Cart).where(Cart.location_id.in_(location_ids)).values(location_id=None))
+    await session.execute(
+        update(Cart)
+        .where(Cart.location_id.in_(location_ids))
+        .values(location_id=None, source_type=None)
+    )
     await session.execute(update(Order).where(Order.location_id.in_(location_ids)).values(location_id=None))
     await session.execute(delete(ProductRequest).where(ProductRequest.location_id.in_(location_ids)))
     await session.execute(delete(StaffAssignment).where(StaffAssignment.location_id.in_(location_ids)))

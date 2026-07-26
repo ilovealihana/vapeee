@@ -51,6 +51,8 @@ def _requested_source(body: AddCartItemRequest) -> tuple[str, int | None]:
         raise api_error(400, ErrorCode.CART_SOURCE_MISMATCH, "Cart source mismatch")
     if body.location_id is not None:
         return SOURCE_LOCAL_POINT, body.location_id
+    if body.source_type == SOURCE_LOCAL_POINT:
+        raise api_error(400, ErrorCode.CART_SOURCE_MISMATCH, "Cart source mismatch")
     return SOURCE_INPOST, None
 
 
@@ -135,7 +137,7 @@ async def _cart_source_schema(cart, catalog: CatalogRepository) -> CartSourceSch
         status = "available" if available else "inactive"
         return CartSourceSchema(type=SOURCE_LOCAL_POINT, location_id=cart.location_id, status=status)
     if source_type == SOURCE_INPOST:
-        return CartSourceSchema(type=SOURCE_INPOST, location_id=None, status="available")
+        return CartSourceSchema(type=SOURCE_INPOST, location_id=None, status="inactive")
     return None
 
 
