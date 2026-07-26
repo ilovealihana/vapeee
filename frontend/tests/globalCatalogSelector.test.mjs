@@ -46,6 +46,9 @@ test('selector screen renders in copied catalog shell with list and map tabs', (
   assert.match(selectorSource, /catalogSelector\.workingHoursFallback/);
   assert.match(selectorSource, /window\.confirm/);
   assert.match(selectorSource, /clearCart/);
+  assert.match(selectorSource, /refreshedOnMountRef/);
+  assert.match(selectorSource, /loadSources\(\);/);
+  assert.doesNotMatch(selectorSource, /if \(!sources && !loading\) loadSources\(\);/);
 });
 
 test('products and product detail load by selected catalog source', () => {

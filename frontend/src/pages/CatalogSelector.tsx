@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { CatalogSourceLocation } from '../api/client';
 import CopiedBottomNav from '../components/CopiedBottomNav';
@@ -44,10 +44,13 @@ export default function CatalogSelector() {
   const [expandedCityId, setExpandedCityId] = useState<number | null>(null);
   const [selectingKey, setSelectingKey] = useState('');
   const [message, setMessage] = useState('');
+  const refreshedOnMountRef = useRef(false);
 
   useEffect(() => {
-    if (!sources && !loading) loadSources();
-  }, [loadSources, loading, sources]);
+    if (refreshedOnMountRef.current) return;
+    refreshedOnMountRef.current = true;
+    loadSources();
+  }, [loadSources]);
 
   const selectedKey = selectedSource?.type === 'local_point'
     ? `local-${selectedSource.locationId}`
