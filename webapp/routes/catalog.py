@@ -135,7 +135,7 @@ async def get_catalog_sources(session: AsyncSession = Depends(get_session)):
         cities.append(CatalogSourceCitySchema(id=city.id, name=city.name, locations=locations))
     return CatalogSourcesSchema(
         inpost=CatalogSourceInpostSchema(
-            status="available" if inpost_summary["total_qty"] > 0 else "inactive",
+            status="inactive",
             stock_count=inpost_summary["total_qty"],
         ),
         cities=cities,

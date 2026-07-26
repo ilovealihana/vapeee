@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from decimal import Decimal
+import json
 import logging
 
 from fastapi import APIRouter, Depends
@@ -24,6 +25,8 @@ router = APIRouter(prefix="/api/orders", tags=["orders"])
 logger = logging.getLogger(__name__)
 ALLOWED_DELIVERY_TYPES = {"pickup", "door_delivery", "inpost"}
 ALLOWED_PAYMENT_METHODS = {"cash", "blik", "monobank"}
+SOURCE_LOCAL_POINT = "local_point"
+SOURCE_INPOST = "inpost"
 
 
 def delivery_cost_for_type(delivery_type: str, fixed_delivery_cost: Decimal) -> Decimal:
@@ -34,6 +37,15 @@ def delivery_cost_for_type(delivery_type: str, fixed_delivery_cost: Decimal) -> 
 
 def should_deduct_stock(delivery_type: str) -> bool:
     return delivery_type in {"pickup", "door_delivery"}
+
+
+def _cart_source_type(cart) -> str | None:
+    source_type = getattr(cart, "source_type", None)
+    if source_type:
+        return source_type
+    if getattr(cart, "location_id", None) is not None:
+        return SOURCE_LOCAL_POINT
+    return None
 
 
 def _parse_schedule(scheduled_date: str, scheduled_time: str) -> datetime:
@@ -117,6 +129,13 @@ async def create_order(
     if not cart or not cart.items:
         raise api_error(400, ErrorCode.ORDER_CART_EMPTY, "Cart is empty")
 
+    cart_source_type = _cart_source_type(cart)
+    requested_source_type = body.source_type or cart_source_type
+    if body.delivery_type == "inpost" or requested_source_type == SOURCE_INPOST:
+        raise api_error(501, ErrorCode.ORDER_INPOST_UNAVAILABLE, "InPost checkout unavailable")
+    if cart_source_type and requested_source_type and cart_source_type != requested_source_type:
+        raise api_error(400, ErrorCode.ORDER_INSUFFICIENT_STOCK, "Insufficient stock")
+
     # Calculate totals
     catalog = CatalogRepository(session)
     order_items = []
@@ -141,12 +160,13 @@ async def create_order(
         Decimal(str(settings.INPOST_DELIVERY_COST)),
     )
     total = products_total + delivery_cost
+    order_source_type = requested_source_type or (SOURCE_LOCAL_POINT if (body.location_id or cart.location_id) else None)
     order_location_id = body.location_id or (cart.location_id if cart else None)
 
-    if should_deduct_stock(body.delivery_type) and not order_location_id:
+    if order_source_type == SOURCE_LOCAL_POINT and not order_location_id:
         raise api_error(400, ErrorCode.ORDER_LOCATION_REQUIRED, "Location is required")
 
-    if should_deduct_stock(body.delivery_type) and order_location_id:
+    if order_source_type == SOURCE_LOCAL_POINT and order_location_id:
         await _validate_order_location_available(catalog, order_location_id)
         await _validate_location_stock(cart.items, order_location_id, session)
 
@@ -162,15 +182,20 @@ async def create_order(
         delivery_cost=delivery_cost,
         total=total,
         payment_method=body.payment_method,
+        source_type=order_source_type,
         location_id=order_location_id,
         delivery_address=body.delivery_address,
         scheduled_at=scheduled_at,
+        inpost_delivery_method=body.inpost_delivery_method,
+        inpost_point_id=body.inpost_point_id,
+        inpost_point_label=body.inpost_point_label,
+        inpost_courier_address_json=json.dumps(body.inpost_courier_address) if body.inpost_courier_address else None,
         comment=body.comment,
     )
     await order_repo.add_items(order.id, order_items)
 
     # Deduct stock for orders fulfilled from a selected location.
-    if should_deduct_stock(body.delivery_type) and order_location_id:
+    if order_source_type == SOURCE_LOCAL_POINT and order_location_id:
         for item in cart.items:
             if item.variant_id:
                 result = await session.execute(

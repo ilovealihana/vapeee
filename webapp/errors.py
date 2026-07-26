@@ -65,6 +65,7 @@ class ErrorCode:
     ORDER_INVALID_PAYMENT_METHOD = "order.invalid_payment_method"
     ORDER_INVALID_SCHEDULE = "order.invalid_schedule"
     ORDER_INSUFFICIENT_STOCK = "order.insufficient_stock"
+    ORDER_INPOST_UNAVAILABLE = "order.inpost_unavailable"
     ORDER_NOT_FOUND = "order.not_found"
     ORDER_STATUS_INVALID = "order.status_invalid"
 

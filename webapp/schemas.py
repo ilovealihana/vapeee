@@ -244,6 +244,8 @@ class OrderSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    source_type: Optional[str] = None
+    location_id: Optional[int] = None
     delivery_type: str
     status: str
     customer_name: str
@@ -255,6 +257,10 @@ class OrderSchema(BaseModel):
     delivery_cost: Decimal
     total: Decimal
     payment_method: str
+    inpost_delivery_method: Optional[str] = None
+    inpost_point_id: Optional[str] = None
+    inpost_point_label: Optional[str] = None
+    inpost_courier_address_json: Optional[str] = None
     comment: Optional[str]
     created_at: datetime
     items: List[OrderItemSchema] = []
@@ -262,6 +268,7 @@ class OrderSchema(BaseModel):
 
 class CreateOrderRequest(BaseModel):
     delivery_type: str          # "pickup" | "door_delivery"
+    source_type: Optional[str] = None
     customer_name: str
     customer_phone: str
     customer_email: str
@@ -270,6 +277,10 @@ class CreateOrderRequest(BaseModel):
     scheduled_date: str         # "2025-03-15"
     scheduled_time: str         # "14:00"
     payment_method: str         # "cash" | "blik" | "monobank"
+    inpost_delivery_method: Optional[str] = None
+    inpost_point_id: Optional[str] = None
+    inpost_point_label: Optional[str] = None
+    inpost_courier_address: Optional[dict] = None
     comment: Optional[str] = None
 
 

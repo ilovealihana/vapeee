@@ -26,13 +26,19 @@ class OrderRepository:
         delivery_cost: Decimal,
         total: Decimal,
         payment_method: str,
+        source_type: str | None = None,
         location_id: int | None = None,
         delivery_address: str | None = None,
         scheduled_at: datetime | None = None,
+        inpost_delivery_method: str | None = None,
+        inpost_point_id: str | None = None,
+        inpost_point_label: str | None = None,
+        inpost_courier_address_json: str | None = None,
         comment: str | None = None,
     ) -> Order:
         order = Order(
             user_id=user_id,
+            source_type=source_type,
             location_id=location_id,
             delivery_type=delivery_type,
             customer_name=customer_name,
@@ -44,6 +50,10 @@ class OrderRepository:
             delivery_cost=delivery_cost,
             total=total,
             payment_method=payment_method,
+            inpost_delivery_method=inpost_delivery_method,
+            inpost_point_id=inpost_point_id,
+            inpost_point_label=inpost_point_label,
+            inpost_courier_address_json=inpost_courier_address_json,
             comment=comment,
         )
         self.session.add(order)
