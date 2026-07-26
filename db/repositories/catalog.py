@@ -6,6 +6,7 @@ from sqlalchemy.orm import selectinload
 
 from db.models.category import Category
 from db.models.city import City
+from db.models.inpost_stock import InpostStock
 from db.models.location import Location
 from db.models.location_stock import LocationStock
 from db.models.product import Product
@@ -45,6 +46,15 @@ class CatalogRepository:
             .order_by(Location.name)
         )
         return list(result.scalars().all())
+
+    async def get_catalog_source_cities(self) -> list[City]:
+        result = await self.session.execute(
+            select(City)
+            .where(City.is_active == True)
+            .options(selectinload(City.locations))
+            .order_by(City.name)
+        )
+        return list(result.scalars().unique().all())
 
     async def get_location(self, location_id: int) -> Location | None:
         result = await self.session.execute(
@@ -106,6 +116,25 @@ class CatalogRepository:
         row = result.one()
         return {"total_qty": row.total_qty or 0, "last_sold": row.last_sold}
 
+    async def get_inpost_stock_summary(self) -> dict:
+        result = await self.session.execute(
+            select(
+                func.sum(InpostStock.quantity).label("total_qty"),
+                func.max(InpostStock.last_sold_at).label("last_sold"),
+            )
+            .join(ProductVariant, ProductVariant.id == InpostStock.variant_id)
+            .join(Product, Product.id == ProductVariant.product_id)
+            .where(Product.is_active == True)
+        )
+        row = result.one()
+        return {"total_qty": row.total_qty or 0, "last_sold": row.last_sold}
+
+    async def get_inpost_variant_quantity(self, variant_id: int) -> int:
+        result = await self.session.execute(
+            select(InpostStock.quantity).where(InpostStock.variant_id == variant_id)
+        )
+        return result.scalar_one_or_none() or 0
+
     async def get_stock_for_location(self, location_id: int) -> list[LocationStock]:
         result = await self.session.execute(
             select(LocationStock)
@@ -156,6 +185,7 @@ class CatalogRepository:
         self,
         category_id: int | None = None,
         location_id: int | None = None,
+        source: str | None = None,
         page: int = 0,
         page_size: int = 5,
     ) -> list[Product]:
@@ -172,6 +202,13 @@ class CatalogRepository:
                     LocationStock.location_id == location_id,
                     LocationStock.quantity > 0,
                 )
+                .distinct()
+            )
+        if source == "inpost":
+            q = (
+                q.join(ProductVariant, ProductVariant.product_id == Product.id)
+                .join(InpostStock, InpostStock.variant_id == ProductVariant.id)
+                .where(InpostStock.quantity > 0)
                 .distinct()
             )
         q = q.order_by(Product.id).offset(page * page_size).limit(page_size)

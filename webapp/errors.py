@@ -47,6 +47,7 @@ class ErrorCode:
     CATALOG_CATEGORY_NOT_FOUND = "catalog.category_not_found"
     CATALOG_PRODUCT_NOT_FOUND = "catalog.product_not_found"
     CATALOG_PRODUCT_UNAVAILABLE = "catalog.product_unavailable"
+    CATALOG_SOURCE_INVALID = "catalog.source_invalid"
     CATALOG_VARIANT_NOT_FOUND = "catalog.variant_not_found"
     CATALOG_VARIANT_UNAVAILABLE = "catalog.variant_unavailable"
 

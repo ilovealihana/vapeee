@@ -128,6 +128,8 @@ class LocationSchema(BaseModel):
     address: str
     description: Optional[str]
     curator_tg_username: Optional[str]
+    latitude: Optional[Decimal] = None
+    longitude: Optional[Decimal] = None
     is_active: bool
     has_manager: bool = False
     manager_tg_id: Optional[int] = None
@@ -144,6 +146,37 @@ class CitySchema(BaseModel):
     slug: str
     manager_tg_id: Optional[int]
     is_active: bool
+
+
+class CatalogSourceInpostSchema(BaseModel):
+    type: str = "inpost"
+    status: str
+    stock_count: int
+
+
+class CatalogSourceLocationSchema(BaseModel):
+    type: str = "local_point"
+    id: int
+    city_id: int
+    name: str
+    address: str
+    status: str
+    catalog_available: bool
+    stock_count: int
+    latitude: Optional[Decimal] = None
+    longitude: Optional[Decimal] = None
+    manager_tg_username: Optional[str] = None
+
+
+class CatalogSourceCitySchema(BaseModel):
+    id: int
+    name: str
+    locations: List[CatalogSourceLocationSchema]
+
+
+class CatalogSourcesSchema(BaseModel):
+    inpost: CatalogSourceInpostSchema
+    cities: List[CatalogSourceCitySchema]
 
 
 # ── Cart ──────────────────────────────────────────────────

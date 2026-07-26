@@ -10,6 +10,10 @@ from db.repositories.catalog import CatalogRepository
 from webapp.deps import get_session
 from webapp.errors import ErrorCode, api_error
 from webapp.schemas import (
+    CatalogSourceCitySchema,
+    CatalogSourceInpostSchema,
+    CatalogSourceLocationSchema,
+    CatalogSourcesSchema,
     CategorySchema,
     CitySchema,
     LocationSchema,
@@ -21,19 +25,36 @@ from webapp.schemas import (
 router = APIRouter(prefix="/api", tags=["catalog"])
 
 
-def _product_schema_for_location(product, location_id: int | None = None) -> ProductSchema:
+def _direct_default(value, default):
+    if hasattr(value, "default"):
+        return value.default
+    return value
+
+
+async def _product_schema_for_source(
+    repo: CatalogRepository,
+    product,
+    location_id: int | None = None,
+    source: str | None = None,
+) -> ProductSchema:
     schema = ProductSchema.model_validate(product)
-    if location_id is None:
+    if location_id is None and source is None:
         return schema
 
-    schema.variants = [
-        VariantSchema.model_validate(variant)
-        for variant in product.variants
-        if any(
-            stock.location_id == location_id and stock.quantity > 0
-            for stock in variant.stock_items
-        )
-    ]
+    if source == "inpost":
+        schema.variants = []
+        for variant in product.variants:
+            if await repo.get_inpost_variant_quantity(variant.id) > 0:
+                schema.variants.append(VariantSchema.model_validate(variant))
+    else:
+        schema.variants = [
+            VariantSchema.model_validate(variant)
+            for variant in product.variants
+            if any(
+                stock.location_id == location_id and stock.quantity > 0
+                for stock in variant.stock_items
+            )
+        ]
     return schema
 
 
@@ -69,11 +90,56 @@ async def _validate_catalog_location(repo: CatalogRepository, location_id: int |
     await _get_active_catalog_location(repo, location_id)
 
 
+def _validate_product_source(source: str | None, location_id: int | None) -> None:
+    if source is not None and source != "inpost":
+        raise api_error(400, ErrorCode.CATALOG_SOURCE_INVALID, "Catalog source invalid")
+    if source is not None and location_id is not None:
+        raise api_error(400, ErrorCode.CATALOG_SOURCE_INVALID, "Catalog source invalid")
+
+
+def _source_status_for_location(has_manager: bool) -> str:
+    return "available" if has_manager else "coming_soon"
+
+
 @router.get("/cities", response_model=list[CitySchema])
 async def get_cities(session: AsyncSession = Depends(get_session)):
     repo = CatalogRepository(session)
     cities = await repo.get_cities()
     return [CitySchema.model_validate(c) for c in cities]
+
+
+@router.get("/catalog-sources", response_model=CatalogSourcesSchema)
+async def get_catalog_sources(session: AsyncSession = Depends(get_session)):
+    repo = CatalogRepository(session)
+    inpost_summary = await repo.get_inpost_stock_summary()
+    cities = []
+    for city in await repo.get_catalog_source_cities():
+        locations = []
+        for location in sorted(city.locations, key=lambda item: item.name):
+            if not location.is_active:
+                continue
+            manager = await repo.get_location_point_manager(location.id)
+            summary = await repo.get_location_stock_summary(location.id)
+            locations.append(CatalogSourceLocationSchema(
+                id=location.id,
+                city_id=city.id,
+                name=location.name,
+                address=location.address,
+                status=_source_status_for_location(manager is not None),
+                catalog_available=manager is not None,
+                stock_count=summary["total_qty"],
+                latitude=location.latitude,
+                longitude=location.longitude,
+                manager_tg_username=getattr(manager, "username", None) if manager else None,
+            ))
+        cities.append(CatalogSourceCitySchema(id=city.id, name=city.name, locations=locations))
+    return CatalogSourcesSchema(
+        inpost=CatalogSourceInpostSchema(
+            status="available" if inpost_summary["total_qty"] > 0 else "inactive",
+            stock_count=inpost_summary["total_qty"],
+        ),
+        cities=cities,
+    )
 
 
 @router.get("/cities/{city_id}/locations", response_model=list[LocationSchema])
@@ -119,11 +185,18 @@ async def get_categories(session: AsyncSession = Depends(get_session)):
 async def get_products(
     category_id: Optional[int] = Query(None),
     location_id: Optional[int] = Query(None),
+    source: Optional[str] = Query(None),
     page: int = Query(0, ge=0),
     page_size: int = Query(20, ge=1, le=50),
     session: AsyncSession = Depends(get_session),
 ):
+    category_id = _direct_default(category_id, None)
+    location_id = _direct_default(location_id, None)
+    source = _direct_default(source, None)
+    page = _direct_default(page, 0)
+    page_size = _direct_default(page_size, 20)
     repo = CatalogRepository(session)
+    _validate_product_source(source, location_id)
     if category_id is not None:
         category = await repo.get_category(category_id)
         if not category:
@@ -132,26 +205,31 @@ async def get_products(
     products = await repo.get_products(
         category_id=category_id,
         location_id=location_id,
+        source=source,
         page=page,
         page_size=page_size,
     )
-    return [_product_schema_for_location(p, location_id) for p in products]
+    return [await _product_schema_for_source(repo, p, location_id, source) for p in products]
 
 
 @router.get("/products/{product_id}", response_model=ProductSchema)
 async def get_product(
     product_id: int,
     location_id: Optional[int] = Query(None),
+    source: Optional[str] = Query(None),
     session: AsyncSession = Depends(get_session),
 ):
+    location_id = _direct_default(location_id, None)
+    source = _direct_default(source, None)
     repo = CatalogRepository(session)
+    _validate_product_source(source, location_id)
     await _validate_catalog_location(repo, location_id)
     product = await repo.get_product(product_id)
     if not product:
         raise api_error(404, ErrorCode.CATALOG_PRODUCT_NOT_FOUND, "Product not found")
     if not product.is_active:
         raise api_error(404, ErrorCode.CATALOG_PRODUCT_UNAVAILABLE, "Product unavailable")
-    product_schema = _product_schema_for_location(product, location_id)
-    if location_id is not None and not product_schema.variants:
+    product_schema = await _product_schema_for_source(repo, product, location_id, source)
+    if (location_id is not None or source is not None) and not product_schema.variants:
         raise api_error(404, ErrorCode.CATALOG_PRODUCT_UNAVAILABLE, "Product unavailable")
     return product_schema
