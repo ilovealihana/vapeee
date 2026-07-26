@@ -94,6 +94,8 @@ export interface Location {
   address: string;
   description?: string;
   curator_tg_username?: string;
+  latitude?: string | null;
+  longitude?: string | null;
   is_active: boolean;
   has_manager: boolean;
   manager_tg_id?: number;
@@ -110,6 +112,49 @@ export interface City {
   is_active: boolean;
 }
 
+export interface CatalogSourceInpost {
+  type: 'inpost';
+  status: 'available' | 'inactive';
+  stock_count: number;
+}
+
+export interface CatalogSourceLocation {
+  type: 'local_point';
+  id: number;
+  city_id: number;
+  name: string;
+  address: string;
+  status: 'available' | 'coming_soon' | 'inactive';
+  catalog_available: boolean;
+  stock_count: number;
+  latitude?: string | null;
+  longitude?: string | null;
+  manager_tg_username?: string | null;
+}
+
+export interface CatalogSourceCity {
+  id: number;
+  name: string;
+  locations: CatalogSourceLocation[];
+}
+
+export interface CatalogSources {
+  inpost: CatalogSourceInpost;
+  cities: CatalogSourceCity[];
+}
+
+export interface CartSource {
+  type: 'local_point' | 'inpost';
+  location_id?: number | null;
+  status: 'available' | 'coming_soon' | 'inactive';
+}
+
+export interface CartItemAvailability {
+  active: boolean;
+  reason: 'source_unavailable' | 'product_unavailable' | 'variant_unavailable' | 'insufficient_stock' | null;
+  available_quantity: number;
+}
+
 export interface CartItem {
   id: number;
   variant_id: number;
@@ -118,12 +163,14 @@ export interface CartItem {
   product?: Product;
   price?: string;
   subtotal?: string;
+  availability?: CartItemAvailability | null;
 }
 
 export interface Cart {
   id: number;
   user_id: number;
   location_id?: number;
+  source?: CartSource | null;
   items: CartItem[];
   total: string;
 }
@@ -148,6 +195,7 @@ export interface Order {
 
 export interface CreateOrderRequest {
   delivery_type: string;
+  source_type?: string;
   customer_name: string;
   customer_phone: string;
   customer_email: string;
@@ -156,6 +204,10 @@ export interface CreateOrderRequest {
   scheduled_date: string;
   scheduled_time: string;
   payment_method: string;
+  inpost_delivery_method?: string;
+  inpost_point_id?: string;
+  inpost_point_label?: string;
+  inpost_courier_address?: Record<string, unknown>;
   comment?: string;
 }
 
@@ -178,19 +230,22 @@ export const api = {
 
   catalog: {
     cities: () => request<City[]>('/api/cities'),
+    sources: () => request<CatalogSources>('/api/catalog-sources'),
     locations: (cityId: number) => request<Location[]>(`/api/cities/${cityId}/locations`),
     location: (id: number) => request<Location>(`/api/locations/${id}`),
     categories: () => request<Category[]>('/api/categories'),
-    products: (params?: { category_id?: number; location_id?: number; page?: number }) => {
+    products: (params?: { category_id?: number; location_id?: number; source?: 'inpost'; page?: number }) => {
       const q = new URLSearchParams();
       if (params?.category_id) q.set('category_id', String(params.category_id));
       if (params?.location_id) q.set('location_id', String(params.location_id));
+      if (params?.source) q.set('source', params.source);
       if (params?.page) q.set('page', String(params.page));
       return request<Product[]>(`/api/products?${q}`);
     },
-    product: (id: number, params?: { location_id?: number }) => {
+    product: (id: number, params?: { location_id?: number; source?: 'inpost' }) => {
       const q = new URLSearchParams();
       if (params?.location_id) q.set('location_id', String(params.location_id));
+      if (params?.source) q.set('source', params.source);
       const suffix = q.toString() ? `?${q}` : '';
       return request<Product>(`/api/products/${id}${suffix}`);
     },
@@ -198,10 +253,10 @@ export const api = {
 
   cart: {
     get: () => request<Cart>('/api/cart'),
-    addItem: (variant_id: number, quantity = 1, location_id?: number) =>
+    addItem: (variant_id: number, quantity = 1, location_id?: number, source_type?: 'inpost' | 'local_point') =>
       request<Cart>('/api/cart/items', {
         method: 'POST',
-        body: JSON.stringify({ variant_id, quantity, location_id }),
+        body: JSON.stringify({ variant_id, quantity, location_id, source_type }),
       }),
     updateItem: (itemId: number, quantity: number) =>
       request<Cart>(`/api/cart/items/${itemId}`, {
