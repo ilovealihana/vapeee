@@ -34,6 +34,11 @@ class Settings(BaseSettings):
     # Delivery
     INPOST_DELIVERY_COST: Decimal = Decimal("15.00")
 
+    # Google Maps / Geocoding
+    GOOGLE_GEOCODING_API_KEY: str | None = None
+    GOOGLE_GEOCODING_TIMEOUT_SECONDS: float = 4.0
+    REQUIRE_GOOGLE_GEOCODING: bool = False
+
     # Support
     SUPPORT_USERNAME: str = "support"
 

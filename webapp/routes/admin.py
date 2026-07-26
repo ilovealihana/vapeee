@@ -7,6 +7,7 @@ from sqlalchemy import select, delete, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from config import settings
 from db.models.city import City
 from db.models.cart import Cart
 from db.models.location import Location
@@ -54,6 +55,12 @@ from webapp.services.product_request_lifecycle import (
     release_product_request,
     request_product_request_changes,
 )
+from webapp.services.geocoding import (
+    GeocodingAddressNotFound,
+    GeocodingConfigError,
+    GeocodingTransientError,
+    GoogleGeocoder,
+)
 from webapp.schemas import (
     CitySchema, LocationSchema,
     ProductSchema, VariantSchema,
@@ -70,6 +77,32 @@ from webapp.schemas import (
 )
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
+
+
+async def _geocode_admin_location_address(address: str):
+    if not settings.GOOGLE_GEOCODING_API_KEY and not settings.REQUIRE_GOOGLE_GEOCODING:
+        return None
+    try:
+        return await GoogleGeocoder().geocode(address)
+    except GeocodingAddressNotFound:
+        raise api_error(
+            422,
+            ErrorCode.VALIDATION_FAILED,
+            "Address not found",
+            {"field": "address"},
+        )
+    except GeocodingConfigError:
+        raise api_error(
+            503,
+            ErrorCode.COMMON_SERVICE_UNAVAILABLE,
+            "Geocoding is not configured",
+        )
+    except GeocodingTransientError:
+        raise api_error(
+            503,
+            ErrorCode.COMMON_SERVICE_UNAVAILABLE,
+            "Geocoding service unavailable",
+        )
 
 
 async def _clear_location_delete_dependencies(session: AsyncSession, location_ids: list[int]) -> None:
@@ -851,6 +884,7 @@ async def admin_create_location(
     _=Depends(get_admin_user),
     session: AsyncSession = Depends(get_session),
 ):
+    coordinates = await _geocode_admin_location_address(body.address)
     loc = Location(
         city_id=city_id,
         name=body.name,
@@ -858,6 +892,8 @@ async def admin_create_location(
         description=body.description,
         curator_tg_username=body.curator_tg_username,
     )
+    if coordinates is not None:
+        loc.latitude, loc.longitude = coordinates
     session.add(loc)
     await session.commit()
     await session.refresh(loc)
@@ -878,6 +914,10 @@ async def admin_update_location(
     if body.name is not None:
         loc.name = body.name
     if body.address is not None:
+        if body.address != loc.address:
+            coordinates = await _geocode_admin_location_address(body.address)
+            if coordinates is not None:
+                loc.latitude, loc.longitude = coordinates
         loc.address = body.address
     if body.description is not None:
         loc.description = body.description
