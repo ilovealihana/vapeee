@@ -1,168 +1,177 @@
 # Moderation
 
-**Version:** 1.0.0  
-**Status:** Approved
+**Version:** 1.1.0
+**Status:** Implemented
 
 ## Purpose
 
-This document defines product moderation rules for curator-submitted product requests. Moderation protects catalog quality, inventory correctness and source separation before a product becomes visible to customers.
+This document defines moderation rules for the implemented Local-only product request flow. Moderation protects catalog quality and stock correctness before a requested change becomes visible to customers.
 
 ## Scope
 
 In scope:
 
-- administrator review of product requests;
-- moderation decisions;
-- edit-before-approval behavior;
-- rejection reasons;
-- audit expectations;
-- publication trigger after approval.
+- Local product request review;
+- review locks;
+- approve/reject/request-changes decisions;
+- `need_changes` correction loop;
+- small safe edits before repeat review;
+- audit fields and comments;
+- publication after approval.
 
 Out of scope:
 
+- InPost requests;
+- drafts;
+- request cancellation;
 - post-publication analytics;
-- payment disputes;
-- supplier quality scoring;
-- automatic content moderation.
+- supplier scoring;
+- automatic content moderation;
+- Telegram notification delivery.
 
-## Related documents
+## Related Documents
 
 - `docs/admin/product-requests.md`
 - `docs/admin/products.md`
 - `docs/products/product-model.md`
 - `docs/products/pricing.md`
 - `docs/products/inventory.md`
-- `docs/products/media.md`
 - `docs/products/publishing.md`
 - `docs/backend/permissions.md`
 
-## Business rules
+## Business Rules
 
-1. A product submitted by a curator must pass administrator moderation before publication.
-2. Moderation is performed on a product request, not directly on the live product.
-3. Only requests in `pending_review` can be approved or rejected.
-4. Approval creates or publishes the catalog product according to `docs/admin/product-requests.md`.
-5. Rejection must keep the request data available to the curator.
-6. Administrator edits before approval are allowed for corrections that do not change requester ownership.
-7. Changing source type from `LOCAL` to `INPOST`, from `INPOST` to `LOCAL`, or changing the Local Point after submission requires returning the request to `draft`.
-8. The backend must record who reviewed the request and when.
-9. The frontend must show moderation status clearly but must not enforce moderation permissions alone.
+1. A Local product request must pass review before it changes live catalog or stock.
+2. Moderation is performed on `ProductRequest`, not directly on live product rows.
+3. Only `pending_review` requests can receive verdicts.
+4. A reviewer must lock a request before approve, reject or request changes.
+5. Verdict actions require the lock to be owned by the current reviewer.
+6. Project admin takeover is explicit through the lock endpoint.
+7. City curators can review only assigned cities.
+8. Point managers cannot review.
+9. Approval publishes the requested Local change atomically.
+10. Reject requires a non-empty comment and finalizes the request.
+11. Request changes requires a non-empty comment and moves the request to `need_changes`.
+12. Only `need_changes` requests can be edited.
+13. Successful edit returns the request to `pending_review`.
+14. Approved and rejected requests are final.
+15. Frontend visibility is advisory; backend permissions and transitions are authoritative.
 
-## Moderation checklist
+## Review Locks
 
-Administrator must be able to check:
+Lock behavior:
 
-- source type is correct;
-- Local Point is active when source is `LOCAL`;
-- product name is clear;
-- category is correct if categories are enabled;
-- variants are complete;
-- price values are valid;
-- initial inventory is valid for the selected source;
-- media references are present when required by product presentation;
-- no obvious duplicate product exists in the same source catalog.
+- lock is allowed only for `pending_review`;
+- owner can approve, reject, request changes or release;
+- owner verdict clears the lock;
+- project admin can force-release another reviewer's lock;
+- project admin can take over by locking;
+- city curator cannot act on another reviewer's lock.
+
+If the current user Telegram ID is unavailable in the frontend, owner-only verdict actions are not shown. Backend still enforces the same rule.
 
 ## Decisions
 
 Approve:
 
 - request is valid;
-- administrator accepts the product data;
-- backend publishes product data atomically.
+- reviewer owns the lock;
+- backend publishes product/variant/stock changes atomically;
+- request becomes `approved`.
 
 Reject:
 
-- request is invalid or incomplete;
-- product should not be published;
-- rejection reason is stored and visible to the curator.
+- reviewer owns the lock;
+- non-empty comment is provided;
+- submitted data remains stored for audit;
+- request becomes `rejected`.
 
-Edit then approve:
+Request changes:
 
-- administrator fixes minor data quality problems;
-- source type and ownership do not change;
-- updated request data is what gets published.
+- reviewer owns the lock;
+- non-empty comment is provided;
+- comment is stored as latest `review_comment`;
+- request becomes `need_changes`;
+- lock is cleared.
 
-Cancel:
+Edit and resubmit:
 
-- request should be closed without publication;
-- used for obsolete or accidental requests.
+- allowed only from `need_changes`;
+- blocked while locked;
+- allowed for original point manager, assigned city curator or project admin;
+- editable fields are limited by request type;
+- request returns to `pending_review`.
 
-## Backend requirements
+## Backend Requirements
 
 Backend moderation actions must:
 
-- validate administrator permission;
-- validate current request status;
-- apply status transitions atomically;
-- store reviewer identity and review timestamp;
-- store rejection reason when provided;
-- prevent duplicate publication;
-- roll back publication if product, variant, media or inventory creation fails.
+- validate actor role and assignment;
+- validate current status;
+- validate lock ownership;
+- require comments for reject and request changes;
+- reject immutable PATCH fields;
+- preserve latest review comment through edit;
+- store reviewer identity and timestamps where applicable;
+- roll back publication if approval fails.
 
-## Frontend requirements
+## Frontend Requirements
 
 Frontend must:
 
-- provide a moderation list with status filters;
-- provide a request detail view;
-- show source, target, product, variants, price, media and inventory;
-- expose approve, reject and cancel actions only in administrator context;
-- require confirmation before approve and cancel;
-- allow rejection reason input;
-- surface backend errors without losing form state.
+- show active and archive modes;
+- show mode-specific filters;
+- show latest review comment;
+- expose lock/takeover/release controls according to role and lock state;
+- expose verdict actions only to the lock owner;
+- expose edit only for eligible unlocked `need_changes` requests;
+- keep modal form state when backend errors occur;
+- surface backend errors clearly.
 
-## Permissions
+Frontend must not:
 
-Curator:
+- assume hidden buttons enforce permissions;
+- auto-takeover before verdict;
+- show final requests as editable or reviewable.
 
-- can view own moderation result;
-- can edit rejected request after it returns to `draft`;
-- cannot approve or reject.
+## Edge Cases
 
-Administrator:
+- Product request is updated while reviewer has it open: backend rejects stale invalid transitions or lock conflicts.
+- Reviewer loses lock before submitting a modal: backend rejects the action and frontend keeps form state.
+- Approval races with another reviewer: only the lock owner transition can succeed.
+- Request target or variant becomes invalid before approval: approval is blocked or rolled back.
+- Legacy rejected rows without `review_comment`: list schema falls back to `reject_reason`.
 
-- can view pending requests;
-- can approve, reject, cancel and perform safe edits.
-
-Backend:
-
-- must be the source of truth for every moderation decision.
-
-## Edge cases
-
-- Product request is updated while administrator has it open: backend must reject stale invalid transitions or require refetch.
-- Administrator approval races with another administrator: only one action succeeds.
-- Rejection reason is too long: backend returns validation error and keeps request pending.
-- Request target becomes inactive: approval is blocked.
-- Media reference is deleted before approval: approval is blocked or product is approved without media only if media is not required.
-
-## Test plan
+## Test Plan
 
 Backend tests:
 
-- non-admin cannot approve;
-- non-admin cannot reject;
-- admin can approve pending request;
-- admin can reject pending request;
-- rejected request stores reason;
-- approved request stores reviewer and timestamp;
-- duplicate approval does not create duplicate live products;
-- inactive target blocks approval.
+- point manager cannot review;
+- city curator can review assigned city only;
+- project admin can review all;
+- lock is required for verdicts;
+- project admin takeover is explicit;
+- non-owner cannot act on another lock;
+- reject/request changes require comments;
+- edit is allowed only from unlocked `need_changes`;
+- final statuses reject further lifecycle actions.
 
 Frontend tests:
 
-- pending request list renders;
-- detail view shows all moderation fields;
-- approve confirmation calls backend action;
-- reject form submits reason;
-- permission errors are displayed.
+- API contract exposes review-loop endpoints;
+- action helper covers role/status/lock matrix;
+- page calls lock/release/need-changes/update APIs;
+- page renders filters, latest comment and modals;
+- hidden buttons are not relied on for backend authorization;
+- modal inputs are preserved on API errors.
 
 ## Definition of Done
 
 Moderation is complete when:
 
-- product requests cannot bypass administrator review;
-- approval, rejection and cancellation transitions are enforced on the backend;
-- administrator decisions are auditable;
-- frontend review screens preserve the existing admin design;
+- product requests cannot bypass review;
+- locks gate verdicts;
+- corrections flow through `need_changes`;
+- final requests remain immutable;
+- frontend review screens preserve the admin design;
 - tests cover permission failures, invalid transitions and successful moderation.

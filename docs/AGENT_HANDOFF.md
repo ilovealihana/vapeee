@@ -34,6 +34,7 @@ Do not treat this file as a replacement for the canonical docs. If this file and
 From repo root:
 
 ```powershell
+.venv\Scripts\python.exe -m unittest tests.test_product_requests_contract -v
 .venv\Scripts\python.exe -m unittest discover tests
 git diff --check
 ```
@@ -46,26 +47,28 @@ npm run check:ui-strings
 npm run build
 ```
 
-Deploy commands used recently:
+Deploy commands:
 
 ```powershell
-railway up --detach
-railway status
+git push origin main
+npx --yes @railway/cli up --detach --message "Deploy product request review loop"
 Invoke-RestMethod -Uri 'https://vapebot-production.up.railway.app/health' -TimeoutSec 20 | ConvertTo-Json -Compress
 ```
 
 ```powershell
-vercel deploy --prod --scope team_JYm3nRKRyxalcSjDepIQDMgy --yes
-vercel alias set <deployment-host>.vercel.app frontend-vapebot.vercel.app --scope team_JYm3nRKRyxalcSjDepIQDMgy
+npx --yes vercel deploy --prod --scope team_JYm3nRKRyxalcSjDepIQDMgy --yes
+npx --yes vercel alias set <deployment-host>.vercel.app frontend-vapebot.vercel.app --scope team_JYm3nRKRyxalcSjDepIQDMgy
 ```
+
+Do not run production push/deploy without explicit user approval.
 
 ## User Working Style
 
 - Respond in Russian unless explicitly asked otherwise.
-- Before business logic changes, ask detailed clarifying questions until the behavior is clear.
+- Ask one focused clarification question at a time when behavior is ambiguous.
 - Prefer narrow, test-backed slices.
-- For larger features, use subagent review before final commit/deploy.
-- The user actively tests in the Telegram Mini App and reports UI/flow bugs.
+- Send plans and major verification checkpoints to two independent read-only reviewers.
+- Work inline in the main workspace unless the user says otherwise.
 - Do not remove or rewrite unrelated work.
 
 ## Current Implemented Business State
@@ -77,7 +80,7 @@ Roles currently used:
 - `project_admin`: project-level admin.
 - `city_curator`: curator for one or more cities.
 - `point_manager`: manager for one or more Local Points.
-- `inpost_curator`: exists in staff model, but InPost request flow is not implemented yet.
+- `inpost_curator`: exists in staff model, but InPost request flow is not implemented.
 
 Current hierarchy for this project:
 
@@ -97,15 +100,15 @@ Staff management supports deactivation and hard deletion. Point selection for st
 
 ### Profile
 
-Profile is no longer hardcoded. It uses real user data.
+Profile uses real user data.
 
-Users can edit phone and email in profile. Filled contact fields are used as plain editable defaults during checkout.
+Users can edit phone and email in profile. Filled contact fields are used as editable defaults during checkout.
 
 Profile language UI shows RU/EN/PL/UK, but only RU is currently active.
 
-### Product Requests MVP
+### Product Request Review Loop
 
-Implemented and tested end-to-end in production:
+Implemented locally in code:
 
 - `point_manager` creates Local-only product requests for assigned Local Points.
 - `city_curator` sees and reviews requests only for assigned cities.
@@ -113,150 +116,98 @@ Implemented and tested end-to-end in production:
 - Request types:
   - `ADD_VARIANT`: existing product, new variant name, optional price override, quantity.
   - `ADD_STOCK`: existing product variant, quantity.
+- Statuses:
+  - `pending_review`
+  - `need_changes`
+  - `approved`
+  - `rejected`
+- Active statuses:
+  - `pending_review`
+  - `need_changes`
+- Final statuses:
+  - `approved`
+  - `rejected`
 - No drafts.
 - No InPost requests.
 - No media upload.
-- No Telegram notifications for requests yet.
-- `approve` publishes to live catalog/stock.
-- `reject` stores comment/reason and finalizes request.
-- Approved/rejected requests cannot be approved/rejected again.
-- Frontend row layout was fixed for mobile readability in commit `13d1a2c`.
+- No Telegram notifications are sent for requests in this slice.
+
+Review behavior:
+
+- Reviewer must explicitly lock a `pending_review` request before approve, reject or request changes.
+- Lock owner can approve, reject, request changes or release.
+- Project admin can explicitly take over another lock through the lock endpoint.
+- Project admin can force-release any lock.
+- City curator cannot act on another reviewer's lock.
+- Verdicts clear the lock.
+- Approved/rejected requests are final.
+
+Correction behavior:
+
+- Request changes requires a non-empty comment.
+- `need_changes` stores latest reviewer comment.
+- Original point manager, assigned city curator or project admin can edit an unlocked `need_changes` request.
+- Successful edit returns the request to `pending_review`, clears lock fields and preserves latest comment.
+- PATCH rejects forbidden fields such as `product_id`, `location_id`, `request_type`, and `variant_id`.
+- `price_override: null` clears the override for `ADD_VARIANT`; omitted `price_override` preserves it.
+
+List/UI behavior:
+
+- `/admin/product-requests` has active/archive modes.
+- Active mode shows only `pending_review` and `need_changes`.
+- Archive mode shows only `approved` and `rejected`.
+- Status filters intersect with mode; incompatible combinations return an empty list.
+- Rows show latest comment.
+- UI actions are lock-aware and backed by helper tests.
+- Modal form state is preserved when backend action fails.
+
+Event hook behavior:
+
+- Internal no-op event hooks exist for request lifecycle events.
+- They must not import or call Telegram notification senders in this slice.
 
 Relevant files:
 
 - `db/models/product_request.py`
-- `alembic/versions/0004_product_requests.py`
+- `alembic/versions/0005_product_request_review_loop.py`
 - `webapp/routes/admin.py`
 - `webapp/schemas.py`
-- `frontend/src/pages/admin/AdminProductRequests.tsx`
-- `frontend/src/api/admin.ts`
+- `webapp/services/product_request_lifecycle.py`
+- `webapp/services/product_request_events.py`
 - `tests/test_product_requests_contract.py`
+- `frontend/src/api/admin.ts`
+- `frontend/src/pages/admin/AdminProductRequests.tsx`
+- `frontend/src/pages/admin/productRequestActions.ts`
+- `frontend/src/i18n/locales/ru.ts`
 - `frontend/tests/adminCms.test.mjs`
+- `frontend/tests/productRequestActions.test.mjs`
 
-## Latest Verified Production State
+## Deployment State
 
-The user manually verified:
+The review loop is implemented in local commits. Production deployment is pending until:
 
-- a manager can create a request;
-- admin can see it;
-- approval immediately updates stock;
-- reject opens comment input and completes;
-- city curator sees no requests outside assigned city;
-- after assigning the curator to the city with requests, the requests and history become visible.
+1. full local backend/frontend verification passes;
+2. two read-only reviewers pass the release checkpoint;
+3. the user explicitly approves pushing `main` and deploying Railway/Vercel.
 
-## Next Approved Slice
+## Invariants Future Agents Must Preserve
 
-The next approved slice is product request review loop expansion:
+- Backend remains authoritative for product request permissions, status transitions, locks, prices, inventory and edits.
+- Project admin takeover is explicit through lock; verdict endpoints must not auto-takeover.
+- Verdicts require owned lock.
+- `need_changes` and reject require non-empty comments.
+- Final statuses are immutable.
+- PATCH must reject immutable fields instead of silently ignoring them.
+- `price_override: null` clears override; omitted preserves.
+- Incompatible mode/status filters return an empty list.
+- No Telegram notifications are sent from the no-op hook layer until a future explicit slice.
 
-```text
-need_changes + review lock + edit + filters/archive + notification hook prep
-```
+## Known Documentation Notes
 
-Design spec:
+The canonical current behavior is now documented in:
 
-- `docs/superpowers/specs/2026-07-23-product-request-need-changes-lock-design.md`
+- `docs/admin/product-requests.md`
+- `docs/products/moderation.md`
+- `docs/backend/error-handling.md`
 
-The user approved the design. The next step is to write an implementation plan, then implement through tests and subagent review.
-
-### Approved Behavior
-
-Statuses:
-
-- `pending_review`
-- `need_changes`
-- `approved`
-- `rejected`
-
-Final statuses:
-
-- `approved`
-- `rejected`
-
-`need_changes` behavior:
-
-- reviewer requests changes with mandatory comment;
-- editable by original author, city curator for request city, and project admin;
-- after successful edit, status automatically returns to `pending_review`;
-- only small fields are editable:
-  - `ADD_VARIANT`: variant name, price override, quantity;
-  - `ADD_STOCK`: quantity;
-- request type, Local Point, product and existing target variant are not editable.
-
-Lock behavior:
-
-- reviewer must explicitly take the request for review before approve/reject/need_changes;
-- lock blocks author edits while reviewer is checking;
-- lock owner can approve, reject, request changes or release;
-- project admin can force-release or take over;
-- another curator cannot act on somebody else's lock;
-- verdict clears lock.
-
-UI behavior:
-
-- everything stays on `/admin/product-requests`;
-- use modals, not a new detail route;
-- active mode shows only `pending_review` and `need_changes`;
-- archive mode shows only `approved` and `rejected`;
-- active filters: all active, awaiting review, requires changes;
-- archive filters: all archive, approved, rejected;
-- show latest comment in row and in edit modal;
-- status label for `need_changes`: "Trebuyet izmeneniy" in Russian UI;
-- action label for `need_changes`: "Zaprosit izmeneniya" in Russian UI.
-
-Notification preparation:
-
-- do not send notifications in this slice;
-- add no-op event hooks for future notifications:
-  - `product_request.created`
-  - `product_request.locked`
-  - `product_request.released`
-  - `product_request.need_changes`
-  - `product_request.updated`
-  - `product_request.approved`
-  - `product_request.rejected`
-- hooks should carry enough context for future `TelegramNotificationSender` integration.
-
-## Known Documentation Drift
-
-Some older docs still mention broader or older behavior, including:
-
-- project admin as the only request reviewer;
-- broader product moderation;
-- InPost request support;
-- notification routes for product requests.
-
-Current implemented and user-approved behavior is:
-
-- city curators can review requests in assigned cities;
-- project admins can review all;
-- InPost requests are not implemented yet;
-- notifications are only prepared in the next slice, not sent.
-
-When a conflict appears, inspect current code and the latest specs under `docs/superpowers/specs/` and ask the user before changing business rules.
-
-## Recent Commits To Know
-
-- `13d1a2c` - Fix product request row layout
-- `0961719` - Add local product request workflow
-- `366d516` - Add editable profile contacts
-- `df90358` - Use real profile data
-
-There is also a local spec commit that should be pushed with this handoff:
-
-- `248ebbf` - Document product request need changes workflow
-
-## Implementation Expectations For Next Agent
-
-For the next coding task:
-
-1. Read the design spec.
-2. Create an implementation plan under `docs/superpowers/plans/`.
-3. Start with failing backend tests for lock/status/edit transitions.
-4. Add migration for new fields/status support.
-5. Keep backend authorization authoritative.
-6. Add frontend static tests for route/API/i18n/role/status UI.
-7. Run backend and frontend checks.
-8. Use at least one subagent review before commit/deploy.
-9. Push and deploy only after tests and review are clean.
-
-Do not implement Telegram notifications in the next slice unless the user explicitly expands scope.
+If older docs mention broader behavior such as drafts, InPost requests, cancellation, direct product creation, or notification delivery, inspect current code and ask before changing business rules.

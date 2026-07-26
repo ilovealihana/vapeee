@@ -270,7 +270,7 @@ Frontend must not compare localized error text in logic.
 | Error code | HTTP | When |
 | --- | ---: | --- |
 | `product_request.type_invalid` | 422 | Request type is not supported. |
-| `product_request.source_invalid` | 422 | Source type is not `LOCAL` or `INPOST`. |
+| `product_request.source_invalid` | 422 | Legacy/source-aware validation code; current product request slice is Local-only. |
 | `product_request.permission_denied` | 403 | Actor cannot create/read/edit this request. |
 | `product_request.review_permission_denied` | 403 | Actor cannot review product requests. |
 | `product_request.not_found` | 404 | Product request does not exist. |
@@ -278,9 +278,10 @@ Frontend must not compare localized error text in logic.
 | `product_request.transition_invalid` | 409 | Requested status transition is not allowed. |
 | `product_request.lock_required` | 409 | Verdict action requires active review lock. |
 | `product_request.lock_exists` | 409 | Another reviewer already holds the review lock. |
-| `product_request.lock_not_owner` | 403 | Current admin does not own the active review lock. |
+| `product_request.lock_not_owner` | 409 | Current admin does not own the active review lock. |
 | `product_request.lock_not_allowed_for_status` | 409 | Review lock can only start for `pending_review`. |
 | `product_request.edit_locked` | 409 | Request is under review and cannot be edited. |
+| `product_request.comment_required` | 422 | Reject or request-changes action requires a non-empty reviewer comment. |
 | `product_request.product_required` | 422 | Existing product is required. |
 | `product_request.product_not_found` | 404 | Selected product does not exist. |
 | `product_request.variant_required` | 422 | Existing variant is required for stock addition. |
@@ -289,11 +290,11 @@ Frontend must not compare localized error text in logic.
 | `product_request.variant_name_required` | 422 | New variant name is required. |
 | `product_request.quantity_invalid` | 422 | Quantity violates request-type rules. |
 | `product_request.price_invalid` | 422 | Price override is negative or malformed. |
-| `product_request.location_required` | 422 | Local request requires Local Point. |
+| `product_request.location_required` | 404 | Local Point does not exist or is inactive. |
 | `product_request.location_forbidden` | 403 | Actor has no access to selected Local Point. |
-| `product_request.inpost_inactive` | 403 | InPost curator cannot create request while InPost is inactive. |
-| `product_request.resubmit_not_allowed` | 409 | Request cannot be resubmitted from current status. |
-| `product_request.cancel_not_allowed` | 409 | Request cannot be cancelled from current status. |
+| `product_request.inpost_inactive` | 403 | Legacy InPost request guard; InPost requests are not implemented in the current slice. |
+| `product_request.resubmit_not_allowed` | 409 | Legacy draft/resubmit guard; current correction loop edits `need_changes` directly back to `pending_review`. |
+| `product_request.cancel_not_allowed` | 409 | Legacy cancellation guard; cancellation is not implemented in the current slice. |
 | `product_request.approval_failed` | 500 | Atomic publication failed and was rolled back. |
 
 ### Media upload

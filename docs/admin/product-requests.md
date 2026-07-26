@@ -1,291 +1,240 @@
 # Product Requests
 
-**Version:** 1.0.0  
-**Status:** Approved
+**Version:** 1.1.0
+**Status:** Implemented
 
 ## Purpose
 
-This document defines the workflow where a curator submits a complete product creation request and an administrator reviews it before the product becomes available in a Local Point or InPost catalog.
+This document describes the implemented Local-only product request workflow used by point managers, city curators and project admins.
 
-Product requests are the first approved vertical implementation slice for product management. They prevent curators from publishing products directly and keep catalog publication under administrator control.
+Product requests let point managers propose catalog/stock changes without publishing directly. Backend review remains authoritative for permissions, status transitions, locks, prices, inventory and publication.
 
-## Scope
+## Current Scope
 
-In scope:
+Implemented:
 
-- curator product request creation;
-- request target selection: `LOCAL` or `INPOST`;
-- Local Point selection when the target is `LOCAL`;
-- product core data;
-- product variants;
-- prices;
-- initial inventory;
-- product media references;
-- request statuses;
-- administrator review, edit, approval and rejection;
-- publication to the selected catalog source after approval.
+- Local Point product requests only.
+- `ADD_VARIANT`: add a new variant to an existing product, with optional price override and initial quantity.
+- `ADD_STOCK`: add quantity to an existing variant at a Local Point.
+- Point manager request creation for assigned Local Points.
+- City curator review for assigned cities.
+- Project admin review for all cities.
+- Review locks before verdicts.
+- `need_changes` correction loop.
+- Active/archive list filters.
+- No-op lifecycle event hooks for future notifications.
 
-Out of scope:
+Not implemented:
 
-- public customer checkout;
-- payment processing;
-- stock deduction during order fulfillment;
-- analytics;
-- automatic supplier import.
-
-## Related documents
-
-- `docs/ARCHITECTURE.md`
-- `docs/core/00-project-rules.md`
-- `docs/core/02-user-roles.md`
-- `docs/admin/products.md`
-- `docs/products/product-model.md`
-- `docs/products/variants.md`
-- `docs/products/pricing.md`
-- `docs/products/inventory.md`
-- `docs/products/media.md`
-- `docs/products/moderation.md`
-- `docs/products/publishing.md`
-- `docs/shopping/local-points/catalog.md`
-- `docs/shopping/inpost/catalog.md`
+- Drafts.
+- InPost product requests.
+- New product creation through requests.
+- Media upload through requests.
+- Telegram notification delivery for request lifecycle events.
+- Restoring final requests.
 
 ## Actors
 
-Curator:
+Point manager:
 
-- creates product requests;
-- can submit only for sources allowed by backend permissions;
-- can view own submitted requests;
-- can edit own request only while it is in `draft` or `rejected` status;
-- cannot approve, publish or directly edit live catalog products unless also granted administrator permissions.
+- creates Local-only requests for assigned active Local Points;
+- sees visible requests for assigned Local Points;
+- can edit own `need_changes` request while it is not locked;
+- cannot lock, approve, reject or request changes.
 
-Administrator:
+City curator:
 
-- can view all product requests;
-- can edit submitted request data before approval;
-- can approve or reject requests;
-- can publish approved request data to the catalog;
-- can leave a rejection reason.
+- sees requests for assigned cities;
+- can lock `pending_review` requests in assigned cities;
+- can approve, reject or request changes only while owning the review lock;
+- can edit `need_changes` requests in assigned cities while they are not locked;
+- cannot act on another reviewer's lock.
 
-Backend:
+Project admin:
 
-- is the source of truth for permissions, request status transitions, prices, inventory and publication;
-- must not trust frontend-hidden controls for authorization.
+- sees all product requests;
+- can lock any `pending_review` request;
+- can explicitly take over another reviewer's lock by calling lock;
+- can force-release any lock;
+- can approve, reject or request changes only while owning the lock;
+- can edit any unlocked `need_changes` request.
 
-## Status model
+## Status Model
 
 Allowed statuses:
 
-- `draft` - curator is still editing the request.
-- `pending_review` - curator submitted the request for administrator review.
-- `approved` - administrator approved the request and the product was published or is ready to publish inside the same backend transaction.
-- `rejected` - administrator rejected the request with an optional comment.
-- `cancelled` - curator or administrator cancelled the request before approval.
+- `pending_review` - request is waiting for review.
+- `need_changes` - reviewer requested corrections with a mandatory comment.
+- `approved` - request was approved and published to the Local catalog/stock.
+- `rejected` - request was rejected with a mandatory comment.
+
+Active statuses:
+
+- `pending_review`
+- `need_changes`
+
+Final statuses:
+
+- `approved`
+- `rejected`
 
 Allowed transitions:
 
-- `draft` -> `pending_review`
-- `draft` -> `cancelled`
+- create -> `pending_review`
 - `pending_review` -> `approved`
 - `pending_review` -> `rejected`
-- `pending_review` -> `cancelled`
-- `rejected` -> `draft`
-- `rejected` -> `cancelled`
+- `pending_review` -> `need_changes`
+- `need_changes` -> `pending_review` after a successful edit
 
-No transition is allowed out of `approved` or `cancelled`.
+No transition is allowed out of `approved` or `rejected`.
 
-## Business rules
+## Review Locks
 
-1. A product request must have exactly one source type: `LOCAL` or `INPOST`.
-2. A `LOCAL` request must reference one active city and one active Local Point.
-3. An `INPOST` request must not reference a Local Point.
-4. Local Point and InPost products may share product naming rules, but they must not share inventory or cart state.
-5. A request must include product name, base price, at least one variant and initial availability data before it can move to `pending_review`.
-6. Product display names and descriptions are stored as product content and do not change automatically when the interface language changes.
-7. Prices are stored and validated on the backend.
-8. The frontend may show draft validation, but backend validation is authoritative.
-9. Approval publishes the product to the selected source only.
-10. Rejection must preserve the submitted data so the curator can revise and resubmit it.
-11. Administrators may edit request data before approval when the correction is small and does not change the request ownership or source type.
-12. Any change to source type after submission requires returning the request to `draft`.
-13. A request approval must be atomic: the product, variants, media references and inventory state must either all be created or none of them are created.
-14. Published catalog products must be linked back to the source request for auditability.
+Verdicts require an active lock owned by the reviewer:
 
-## User flow
+- approve;
+- reject;
+- request changes.
 
-Curator flow:
+Lock rules:
 
-1. Curator opens the admin/curator product request screen.
-2. Curator selects product source: `LOCAL` or `INPOST`.
-3. If `LOCAL`, curator selects city and Local Point.
-4. Curator fills product data.
-5. Curator adds one or more variants.
-6. Curator sets prices and initial inventory.
-7. Curator attaches media references if available.
-8. Curator saves the request as `draft` or submits it as `pending_review`.
-9. Curator sees review status and rejection comments.
+- only `pending_review` requests can be locked;
+- point managers cannot lock;
+- the same reviewer can call lock idempotently;
+- city curators cannot take over another reviewer's lock;
+- project admin takeover is explicit through the lock endpoint;
+- release clears the lock for the owner;
+- project admin can release any lock;
+- verdicts clear the lock.
 
-Administrator flow:
+## Correction Loop
 
-1. Administrator opens product requests.
-2. Administrator filters by status and source type.
-3. Administrator opens a request detail view.
-4. Administrator checks product data, variants, media, price and inventory.
-5. Administrator approves, edits then approves, rejects with a comment, or cancels the request.
-6. On approval, the product becomes visible in the selected catalog according to publishing rules.
+`need_changes` rules:
 
-## Backend requirements
+- reviewer comment is required;
+- latest reviewer comment is stored in `review_comment`;
+- `reject_reason` is retained for backward compatibility and legacy rejected rows;
+- only `need_changes` requests can be edited;
+- locked `need_changes` requests cannot be edited;
+- successful edit returns the request to `pending_review`;
+- successful edit clears lock fields and preserves the latest reviewer comment.
 
-Backend must provide endpoints for:
+Editable fields:
 
-- creating a draft product request;
-- updating an editable request;
-- submitting a request for review;
-- listing requests visible to the current actor;
-- reading request details;
-- approving a request;
-- rejecting a request;
-- cancelling a request.
+- `ADD_VARIANT`: `variant_name_ru`, `variant_name_pl`, `variant_name_uk`, `price_override`, `quantity`;
+- `ADD_STOCK`: `quantity` only.
 
-Backend must validate:
+Forbidden fields are rejected, not silently ignored:
 
-- actor role;
-- source type;
-- city and Local Point membership for `LOCAL` requests;
-- absence of Local Point for `INPOST` requests;
-- required product fields;
-- variant list is not empty before submission;
-- non-negative inventory quantities;
-- non-negative prices;
-- allowed status transitions.
+- `product_id`;
+- `location_id`;
+- `request_type`;
+- `variant_id`;
+- ownership/requester fields.
 
-## Frontend requirements
+For `ADD_VARIANT`, explicit `price_override: null` clears the override. Omitted `price_override` preserves the previous value.
 
-Frontend must:
+## Listing
 
-- reuse the existing admin UI style and navigation;
-- show separate states for draft, pending review, approved, rejected and cancelled;
-- show backend validation errors near the relevant fields;
-- prevent obvious invalid submits in the UI without relying on UI controls for security;
-- keep source selection explicit;
-- show rejection comments to the curator;
-- show administrator actions only when backend user permissions allow them.
+`GET /api/admin/product-requests` supports:
 
-Frontend must not:
+- `mode=active` for `pending_review` and `need_changes`;
+- `mode=archive` for `approved` and `rejected`;
+- `status=pending_review|need_changes|approved|rejected`.
 
-- publish a product directly from curator UI;
-- treat hidden buttons as permission enforcement;
-- merge Local Point and InPost request state.
+`mode` and `status` combine by intersection. Incompatible filters such as `mode=active&status=approved` return an empty list.
 
-## Data model
+Role scoping still applies after filters:
 
-The implementation should introduce a persistent product request model that can store:
+- project admin sees all matching requests;
+- city curator sees matching requests in assigned cities;
+- point manager sees matching requests for assigned Local Points.
 
-- id;
-- source type: `LOCAL` or `INPOST`;
-- city id for Local requests;
-- location id for Local requests;
-- requester user id or Telegram id;
-- current status;
-- rejection reason;
-- product fields;
-- variant fields;
-- media references;
-- initial inventory rows;
-- linked published product id after approval;
-- created, updated, submitted, reviewed timestamps;
-- reviewer id when reviewed.
+## Backend Endpoints
 
-The exact table layout may be split into request, request variant, request media and request inventory tables if that follows local SQLAlchemy conventions better.
+Implemented product request endpoints:
 
-## Permissions
+- `GET /api/admin/product-requests`
+- `POST /api/admin/product-requests`
+- `GET /api/admin/product-requests/options`
+- `POST /api/admin/product-requests/{request_id}/lock`
+- `POST /api/admin/product-requests/{request_id}/release`
+- `POST /api/admin/product-requests/{request_id}/approve`
+- `POST /api/admin/product-requests/{request_id}/reject`
+- `POST /api/admin/product-requests/{request_id}/need-changes`
+- `PATCH /api/admin/product-requests/{request_id}`
 
-Curator permissions:
+Backend validates:
 
-- create own request;
-- update own editable request;
-- submit own request;
-- cancel own non-approved request;
-- read own requests.
+- actor role and staff assignment;
+- Local Point access;
+- request type;
+- status transitions;
+- lock ownership;
+- required comments;
+- quantity and price values;
+- duplicate variant names;
+- immutable edit fields.
 
-Administrator permissions:
+## Frontend Behavior
 
-- read all requests;
-- edit pending requests;
-- approve pending requests;
-- reject pending requests;
-- cancel pending requests.
+The implemented UI stays on `/admin/product-requests`.
 
-Super administrator permissions:
+It provides:
 
-- all administrator permissions;
-- future role management when user role documentation is approved.
+- active/archive mode controls;
+- mode-specific status filters;
+- latest review comment in rows;
+- lock/takeover/release actions;
+- approve/reject/request-changes actions only for the current lock owner;
+- edit modal for eligible `need_changes` requests;
+- reject and request-changes comment modals;
+- backend error display without treating hidden buttons as authorization.
 
-## Validation
+## Event Hooks
 
-Submit validation:
+Lifecycle hooks are implemented as no-op internal calls:
 
-- source type is present;
-- Local request has active city and Local Point;
-- InPost request has no Local Point;
-- product name is present;
-- base price is greater than or equal to zero;
-- at least one variant exists;
-- each variant has a display name;
-- inventory quantity is greater than or equal to zero;
-- attached media references use supported storage identifiers.
+- `product_request.created`
+- `product_request.locked`
+- `product_request.released`
+- `product_request.need_changes`
+- `product_request.updated`
+- `product_request.approved`
+- `product_request.rejected`
 
-Approval validation:
+They must not import or call Telegram notification senders in this slice.
 
-- request is in `pending_review`;
-- reviewer has administrator permission;
-- target source is still active;
-- category, product, variants and inventory can be created consistently;
-- no duplicate publish has already happened.
+## Test Coverage
 
-## Edge cases
+Backend contract tests cover:
 
-- Target Local Point is disabled while the request is pending: approval is blocked until the administrator selects another active target or rejects the request.
-- Category is removed while the request is pending: approval is blocked until the request is corrected.
-- Curator submits a request with zero inventory: allowed only if product visibility rules can keep the product hidden or unavailable.
-- Administrator rejects without a comment: allowed, but frontend should encourage a reason.
-- Curator edits a rejected request: status returns to `draft`.
-- Concurrent approval attempts: only one approval can succeed.
-- Approval partially fails: transaction rolls back and the request remains `pending_review`.
-- Published product is later deactivated: the original request remains as audit history.
+- create permission and Local Point scoping;
+- lock/release permissions;
+- lock-required verdicts;
+- project admin takeover;
+- approve/reject/request-changes transitions;
+- edit from `need_changes`;
+- active/archive/status filters;
+- role scoping with filters;
+- legacy `review_comment` fallback;
+- no-op event hook boundaries.
 
-## Test plan
+Frontend tests cover:
 
-Backend tests:
-
-- curator can create and submit own request;
-- curator cannot approve request;
-- administrator can approve pending request;
-- administrator can reject pending request with comment;
-- invalid status transitions are rejected;
-- Local request without location is rejected;
-- InPost request with location is rejected;
-- approval creates product, variants and inventory atomically;
-- duplicate approval is rejected or idempotently returns the published product without creating duplicates.
-
-Frontend tests:
-
-- request form shows source-specific fields;
-- submit button handles validation errors;
-- rejected request shows rejection reason;
-- administrator review actions are visible only in admin context;
-- approved request no longer exposes edit controls.
+- admin product request routing/API/i18n contracts;
+- product request action helper table;
+- active/archive and action wiring;
+- hardcoded UI string scanning;
+- TypeScript production build.
 
 ## Definition of Done
 
-A product request slice is complete when:
+This slice is complete when:
 
-- the documented status model is implemented;
-- backend permissions enforce curator and administrator boundaries;
-- request data persists before publication;
-- approval publishes product, variants and inventory atomically;
-- rejection preserves request data and reason;
-- Local Point and InPost source rules are enforced;
-- frontend uses the existing admin UI style;
-- backend and frontend tests cover success, permission failure and invalid data paths;
-- related documentation is synchronized.
+- backend lock and transition rules are enforced;
+- active/archive filters work with role scoping;
+- eligible users can edit only `need_changes` requests;
+- approved/rejected requests remain final;
+- frontend actions match backend lock rules;
+- docs, tests and deployment state are synchronized.
