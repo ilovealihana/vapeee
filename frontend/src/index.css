@@ -696,6 +696,27 @@ body {
   object-fit: contain;
   filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.45));
   transform: translateY(-8px);
+  transform-origin: 50% 100%;
+  transition: filter 180ms ease, transform 180ms ease;
+}
+
+.google-map-selector-marker.is-selected {
+  filter:
+    drop-shadow(0 14px 24px rgba(0, 0, 0, 0.55))
+    drop-shadow(0 0 14px rgba(141, 210, 215, 0.82));
+  animation: google-map-selector-marker-pulse 900ms ease-in-out infinite;
+  transform: translateY(-11px) scale(1.12);
+}
+
+@keyframes google-map-selector-marker-pulse {
+  0%,
+  100% {
+    transform: translateY(-11px) scale(1.12);
+  }
+
+  50% {
+    transform: translateY(-17px) scale(1.2);
+  }
 }
 
 .google-map-selector-loading {
@@ -759,6 +780,14 @@ body {
   background: rgba(16, 16, 17, 0.94);
   box-shadow: 0 18px 40px rgba(0, 0, 0, 0.38);
   backdrop-filter: blur(16px);
+}
+
+.google-map-selector-card.is-selected {
+  border-color: rgba(141, 210, 215, 0.48);
+  box-shadow:
+    0 18px 40px rgba(0, 0, 0, 0.38),
+    0 0 0 1px rgba(141, 210, 215, 0.08),
+    0 0 22px rgba(141, 210, 215, 0.16);
 }
 
 .google-map-selector-card-icon {

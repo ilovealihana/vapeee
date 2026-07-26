@@ -50,13 +50,25 @@ test('google map selector uses custom marker taps instead of a list below the ma
   assert.match(componentSource, /importLibrary\('marker'\)/);
   assert.match(componentSource, /AdvancedMarkerElement/);
   assert.match(componentSource, /\/map-marker-r\.png/);
-  assert.match(componentSource, /className="google-map-selector-card"/);
+  assert.match(componentSource, /google-map-selector-card/);
   assert.match(componentSource, /setSelectedMarker/);
   assert.match(componentSource, /onSelectLocation\(selectedMarker\.source\)/);
   assert.doesNotMatch(componentSource, /className="google-map-selector-points"/);
   assert.doesNotMatch(componentSource, /markers\.map\(\(marker\) => \(\s*<button key=\{marker\.id\}/);
   assert.match(css, /\.google-map-selector-marker/);
   assert.match(css, /\.google-map-selector-card/);
+});
+
+test('google map selector marks selected pins and uses a cleaner touch map', () => {
+  assert.match(componentSource, /GOOGLE_MAP_SELECTOR_STYLES/);
+  assert.match(componentSource, /gestureHandling:\s*'greedy'/);
+  assert.match(componentSource, /clickableIcons:\s*false/);
+  assert.match(componentSource, /styles:\s*GOOGLE_MAP_SELECTOR_STYLES/);
+  assert.match(componentSource, /setSelectedMarkerId\(marker\.id\)/);
+  assert.match(componentSource, /isSelected \? ' is-selected' : ''/);
+  assert.match(componentSource, /createMarkerContent\(marker\.name, marker\.id === selectedMarkerIdRef\.current\)/);
+  assert.match(css, /\.google-map-selector-marker\.is-selected/);
+  assert.match(css, /@keyframes google-map-selector-marker-pulse/);
 });
 
 test('catalog selector delegates map tab rendering to GoogleMapSelector', () => {
@@ -70,7 +82,7 @@ test('map fallback styles are bounded and reuse selector visuals', () => {
   assert.match(css, /\.google-map-selector/);
   assert.match(css, /\.google-map-selector-canvas/);
   assert.match(css, /\.google-map-selector-state/);
-  assert.match(css, /min-height:\s*260px;/);
+  assert.match(css, /min-height:\s*360px;/);
 });
 
 function readSource(path) {

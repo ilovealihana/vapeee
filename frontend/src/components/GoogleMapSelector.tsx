@@ -8,6 +8,26 @@ type MapState = 'loading' | 'ready' | 'unavailable' | 'empty';
 const GOOGLE_MAPS_LOAD_TIMEOUT_MS = 7000;
 
 type GoogleLatLng = { lat: number; lng: number };
+type GoogleMapStyle = {
+  featureType?: string;
+  elementType?: string;
+  stylers: Array<Record<string, string | number | boolean>>;
+};
+
+const GOOGLE_MAP_SELECTOR_STYLES: GoogleMapStyle[] = [
+  { elementType: 'geometry', stylers: [{ color: '#202425' }] },
+  { elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#8d9798' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#202425' }] },
+  { featureType: 'administrative', elementType: 'geometry', stylers: [{ visibility: 'off' }] },
+  { featureType: 'poi', stylers: [{ visibility: 'off' }] },
+  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#2d3334' }] },
+  { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ color: '#b7c1c2' }] },
+  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#3f4b4c' }] },
+  { featureType: 'transit', stylers: [{ visibility: 'off' }] },
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#102f35' }] },
+  { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#6f9296' }] },
+];
 
 type GoogleMapMarkerClickHandle = {
   remove?: () => void;
@@ -19,6 +39,7 @@ type GoogleAdvancedMarkerElement = {
 
 type GoogleBasicMarkerElement = {
   addListener?: (eventName: 'click', handler: () => void) => GoogleMapMarkerClickHandle;
+  setIcon?: (icon: unknown) => void;
 };
 
 type GoogleMarkerLibrary = {
@@ -34,7 +55,15 @@ type GoogleMapsApi = {
   maps?: {
     Map: new (
       node: HTMLElement,
-      options: { center: GoogleLatLng; zoom: number; disableDefaultUI: boolean; mapId?: string },
+      options: {
+        center: GoogleLatLng;
+        zoom: number;
+        disableDefaultUI: boolean;
+        clickableIcons: boolean;
+        gestureHandling: 'greedy';
+        styles: GoogleMapStyle[];
+        mapId?: string;
+      },
     ) => unknown;
     Marker?: new (options: { position: GoogleLatLng; map: unknown; title: string; icon?: unknown }) => GoogleBasicMarkerElement;
     Point?: new (x: number, y: number) => unknown;
@@ -134,29 +163,36 @@ function withGoogleMapsTimeout(promise: Promise<void>): Promise<void> {
   ]);
 }
 
-function createMarkerContent(name: string): HTMLElement {
+function createMarkerContent(name: string, isSelected = false): HTMLElement {
   const markerImage = document.createElement('img');
   markerImage.src = '/map-marker-r.png';
   markerImage.alt = name;
-  markerImage.className = 'google-map-selector-marker';
+  markerImage.className = `google-map-selector-marker${isSelected ? ' is-selected' : ''}`;
   return markerImage;
 }
 
-function createBasicMarkerIcon(maps: NonNullable<GoogleMapsApi['maps']>): unknown {
+function createBasicMarkerIcon(maps: NonNullable<GoogleMapsApi['maps']>, isSelected = false): unknown {
+  const size = isSelected ? 68 : 58;
   return {
     url: '/map-marker-r.png',
-    scaledSize: maps.Size ? new maps.Size(58, 58) : undefined,
-    anchor: maps.Point ? new maps.Point(29, 58) : undefined,
+    scaledSize: maps.Size ? new maps.Size(size, size) : undefined,
+    anchor: maps.Point ? new maps.Point(size / 2, size) : undefined,
   };
+}
+
+function setMarkerContentSelected(content: HTMLElement, isSelected: boolean) {
+  content.classList.toggle('is-selected', isSelected);
 }
 
 export default function GoogleMapSelector({ cities, onSelectLocation }: GoogleMapSelectorProps) {
   const activeLocale = useUserStore((state) => state.activeLocale);
   const { t } = useI18n(activeLocale);
   const mapRef = useRef<HTMLDivElement | null>(null);
+  const selectedMarkerIdRef = useRef<number | null>(null);
   const markers = useMemo(() => mapMarkerPoints(cities), [cities]);
   const [mapState, setMapState] = useState<MapState>('loading');
   const [selectedMarker, setSelectedMarker] = useState<GoogleMapMarkerPoint | null>(null);
+  const [selectedMarkerId, setSelectedMarkerId] = useState<number | null>(null);
 
   useEffect(() => {
     const key = googleMapsKey();
@@ -167,6 +203,8 @@ export default function GoogleMapSelector({ cities, onSelectLocation }: GoogleMa
     if (markers.length === 0) {
       setMapState('empty');
       setSelectedMarker(null);
+      setSelectedMarkerId(null);
+      selectedMarkerIdRef.current = null;
       return;
     }
 
@@ -181,6 +219,8 @@ export default function GoogleMapSelector({ cities, onSelectLocation }: GoogleMa
 
     setMapState('loading');
     setSelectedMarker(null);
+    setSelectedMarkerId(null);
+    selectedMarkerIdRef.current = null;
     withGoogleMapsTimeout(ensureGoogleScript(key))
       .then(async () => {
         if (cancelled) return;
@@ -200,17 +240,40 @@ export default function GoogleMapSelector({ cities, onSelectLocation }: GoogleMa
             center: markers[0].position,
             zoom: 12,
             disableDefaultUI: true,
+            clickableIcons: false,
+            gestureHandling: 'greedy',
+            styles: GOOGLE_MAP_SELECTOR_STYLES,
             ...(mapId ? { mapId } : {}),
           });
+          const markerViews: Array<{
+            id: number;
+            content?: HTMLElement;
+            basicMarker?: GoogleBasicMarkerElement;
+          }> = [];
+          const applySelectedMarker = (activeId: number) => {
+            markerViews.forEach((view) => {
+              const isActive = view.id === activeId;
+              if (view.content) setMarkerContentSelected(view.content, isActive);
+              view.basicMarker?.setIcon?.(createBasicMarkerIcon(nextWin.google!.maps!, isActive));
+            });
+          };
+          const chooseMarker = (marker: GoogleMapMarkerPoint) => {
+            selectedMarkerIdRef.current = marker.id;
+            setSelectedMarker(marker);
+            setSelectedMarkerId(marker.id);
+            applySelectedMarker(marker.id);
+          };
           markers.forEach((marker) => {
             if (mapId && markerLibrary?.AdvancedMarkerElement) {
+              const content = createMarkerContent(marker.name, marker.id === selectedMarkerIdRef.current);
               const advancedMarker = new markerLibrary.AdvancedMarkerElement({
                 position: marker.position,
                 map,
                 title: marker.name,
-                content: createMarkerContent(marker.name),
+                content,
               });
-              advancedMarker.addListener?.('click', () => setSelectedMarker(marker));
+              markerViews.push({ id: marker.id, content });
+              advancedMarker.addListener?.('click', () => chooseMarker(marker));
               return;
             }
             if (nextWin.google?.maps?.Marker) {
@@ -218,9 +281,10 @@ export default function GoogleMapSelector({ cities, onSelectLocation }: GoogleMa
                 position: marker.position,
                 map,
                 title: marker.name,
-                icon: createBasicMarkerIcon(nextWin.google.maps),
+                icon: createBasicMarkerIcon(nextWin.google.maps, marker.id === selectedMarkerIdRef.current),
               });
-              basicMarker.addListener?.('click', () => setSelectedMarker(marker));
+              markerViews.push({ id: marker.id, basicMarker });
+              basicMarker.addListener?.('click', () => chooseMarker(marker));
             }
           });
           setMapState('ready');
@@ -269,7 +333,7 @@ export default function GoogleMapSelector({ cities, onSelectLocation }: GoogleMa
           </span>
         )}
         {mapState === 'ready' && selectedMarker && (
-          <article className="google-map-selector-card">
+          <article className={`google-map-selector-card${selectedMarkerId === selectedMarker.id ? ' is-selected' : ''}`}>
             <span className="google-map-selector-card-icon">
               <Icon name="mapPin" size={18} />
             </span>
