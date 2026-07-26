@@ -391,6 +391,11 @@ const ru = {
       newVariantTitle: 'Новый вариант',
       variantModalSubtitle: 'Цена варианта может переопределять базовую цену товара.',
     },
+    stockSourceFilter: 'Источник остатков',
+    stockSources: {
+      localPoint: 'Локальные точки',
+      inpost: 'InPost',
+    },
     stock: {
       title: 'Остатки',
       subtitle: 'Быстрое управление наличием товаров по точкам.',

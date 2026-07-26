@@ -344,7 +344,8 @@ class UpdateVariantRequest(BaseModel):
     price_override: Optional[Decimal] = Field(default=None, ge=0)
 
 class StockItem(BaseModel):
-    location_id: int
+    source_type: str = "local_point"
+    location_id: Optional[int] = None
     variant_id: int
     quantity: int
 
@@ -352,7 +353,8 @@ class UpdateStockRequest(BaseModel):
     items: List[StockItem]
 
 class StockRow(BaseModel):
-    location_id: int
+    source_type: str = "local_point"
+    location_id: Optional[int] = None
     location_name: str
     city_name: str
     variant_id: int

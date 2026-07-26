@@ -2884,6 +2884,33 @@ textarea.input {
   overflow-x: auto;
 }
 
+.admin-stock-source-tabs {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid #2a2a2a;
+  border-radius: 14px;
+  background: #151515;
+}
+
+.admin-stock-source-tabs button {
+  min-height: 34px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--secondary);
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.admin-stock-source-tabs button.active {
+  background: rgba(61, 132, 137, .18);
+  color: #9bd7c6;
+}
+
 .admin-product-request-filter-divider {
   border-top: 1px solid var(--border);
   margin: 0 0 16px;

@@ -10,6 +10,7 @@ from sqlalchemy.orm import selectinload
 from config import settings
 from db.models.city import City
 from db.models.cart import Cart
+from db.models.inpost_stock import InpostStock
 from db.models.location import Location
 from db.models.location_stock import LocationStock
 from db.models.order import Order
@@ -1081,6 +1082,11 @@ async def admin_get_stock(
         (stock.location_id, stock.variant_id): stock.quantity
         for stock in stock_result.scalars().all()
     }
+    inpost_stock_result = await session.execute(select(InpostStock))
+    inpost_stock_by_variant = {
+        stock.variant_id: stock.quantity
+        for stock in inpost_stock_result.scalars().all()
+    }
 
     location_result = await session.execute(
         select(Location, City)
@@ -1102,6 +1108,7 @@ async def admin_get_stock(
     for loc, city in locations:
         for var, prod in variants:
             rows.append(StockRow(
+                source_type="local_point",
                 location_id=loc.id,
                 location_name=loc.name,
                 city_name=city.name,
@@ -1110,6 +1117,17 @@ async def admin_get_stock(
                 product_name=prod.name_ru,
                 quantity=stock_by_location_variant.get((loc.id, var.id), 0),
             ))
+    for var, prod in variants:
+        rows.append(StockRow(
+            source_type="inpost",
+            location_id=None,
+            location_name="InPost",
+            city_name="InPost",
+            variant_id=var.id,
+            variant_name=var.name_ru,
+            product_name=prod.name_ru,
+            quantity=inpost_stock_by_variant.get(var.id, 0),
+        ))
     return rows
 
 
@@ -1120,17 +1138,8 @@ async def admin_update_stock(
     session: AsyncSession = Depends(get_session),
 ):
     for item in body.items:
-        location_result = await session.execute(
-            select(Location, City)
-            .join(City, City.id == Location.city_id)
-            .where(
-                Location.id == item.location_id,
-                Location.is_active == True,
-                City.is_active == True,
-            )
-        )
-        if location_result.one_or_none() is None:
-            raise api_error(404, ErrorCode.ADMIN_LOCATION_NOT_FOUND, "Location not found")
+        if item.source_type not in ("local_point", "inpost"):
+            raise api_error(422, ErrorCode.ADMIN_STOCK_ROW_INVALID, "Stock source invalid")
 
         variant_result = await session.execute(
             select(ProductVariant, Product)
@@ -1142,6 +1151,36 @@ async def admin_update_stock(
         )
         if variant_result.one_or_none() is None:
             raise api_error(404, ErrorCode.ADMIN_VARIANT_NOT_FOUND, "Variant not found")
+
+        if item.source_type == "inpost":
+            result = await session.execute(
+                select(InpostStock).where(InpostStock.variant_id == item.variant_id)
+            )
+            stock = result.scalar_one_or_none()
+            if stock is None:
+                stock = InpostStock(
+                    variant_id=item.variant_id,
+                    quantity=item.quantity,
+                )
+                session.add(stock)
+            else:
+                stock.quantity = item.quantity
+            continue
+
+        if item.location_id is None:
+            raise api_error(404, ErrorCode.ADMIN_LOCATION_NOT_FOUND, "Location not found")
+
+        location_result = await session.execute(
+            select(Location, City)
+            .join(City, City.id == Location.city_id)
+            .where(
+                Location.id == item.location_id,
+                Location.is_active == True,
+                City.is_active == True,
+            )
+        )
+        if location_result.one_or_none() is None:
+            raise api_error(404, ErrorCode.ADMIN_LOCATION_NOT_FOUND, "Location not found")
 
         result = await session.execute(
             select(LocationStock).where(

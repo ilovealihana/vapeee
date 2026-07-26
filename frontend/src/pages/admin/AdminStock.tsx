@@ -5,6 +5,8 @@ import { useI18n } from '../../i18n';
 import { useUserStore } from '../../store/user';
 import { AdminEmptyState, AdminPageHeader } from './AdminUI';
 
+type StockSourceFilter = 'local_point' | 'inpost';
+
 export default function AdminStock() {
   const activeLocale = useUserStore((state) => state.activeLocale);
   const { t } = useI18n(activeLocale);
@@ -15,6 +17,7 @@ export default function AdminStock() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [search, setSearch] = useState('');
+  const [sourceFilter, setSourceFilter] = useState<StockSourceFilter>('local_point');
 
   const load = async () => {
     setLoading(true);
@@ -28,7 +31,7 @@ export default function AdminStock() {
 
   useEffect(() => { load(); }, []);
 
-  const key = (row: StockRow) => `${row.location_id}_${row.variant_id}`;
+  const key = (row: StockRow) => `${row.source_type}_${row.location_id ?? 'inpost'}_${row.variant_id}`;
   const qty = (row: StockRow) => edited[key(row)] ?? row.quantity;
   const editedCount = Object.keys(edited).length;
 
@@ -36,7 +39,12 @@ export default function AdminStock() {
     setSaving(true);
     const items = rows
       .filter(row => edited[key(row)] !== undefined)
-      .map(row => ({ location_id: row.location_id, variant_id: row.variant_id, quantity: edited[key(row)] }));
+      .map(row => ({
+        source_type: row.source_type,
+        location_id: row.location_id,
+        variant_id: row.variant_id,
+        quantity: edited[key(row)],
+      }));
 
     try {
       await adminApi.updateStock(items);
@@ -50,7 +58,8 @@ export default function AdminStock() {
     setSaving(false);
   };
 
-  const filtered = rows.filter(row => [row.product_name, row.variant_name, row.city_name, row.location_name]
+  const filtered = rows.filter(row => row.source_type === sourceFilter)
+    .filter(row => [row.product_name, row.variant_name, row.city_name, row.location_name]
     .some(value => value.toLowerCase().includes(search.toLowerCase())));
 
   return (
@@ -62,6 +71,22 @@ export default function AdminStock() {
       />
 
       <div className="admin-toolbar">
+        <div className="admin-stock-source-tabs" role="group" aria-label={t('admin.stockSourceFilter')}>
+          <button
+            className={sourceFilter === 'local_point' ? 'active' : ''}
+            type="button"
+            onClick={() => setSourceFilter('local_point')}
+          >
+            {t('admin.stockSources.localPoint')}
+          </button>
+          <button
+            className={sourceFilter === 'inpost' ? 'active' : ''}
+            type="button"
+            onClick={() => setSourceFilter('inpost')}
+          >
+            {t('admin.stockSources.inpost')}
+          </button>
+        </div>
         <label className="admin-search-field">
           <Icon name="search" size={18} />
           <input

@@ -56,7 +56,8 @@ export interface AdminProduct {
 }
 
 export interface StockRow {
-  location_id: number; location_name: string; city_name: string;
+  source_type: 'local_point' | 'inpost';
+  location_id?: number | null; location_name: string; city_name: string;
   variant_id: number; variant_name: string; product_name: string;
   quantity: number;
 }
@@ -213,7 +214,7 @@ export const adminApi = {
 
   // Stock
   getStock: () => req<StockRow[]>('/api/admin/stock'),
-  updateStock: (items: { location_id: number; variant_id: number; quantity: number }[]) =>
+  updateStock: (items: { source_type: 'local_point' | 'inpost'; location_id?: number | null; variant_id: number; quantity: number }[]) =>
     req<{ ok: boolean }>('/api/admin/stock', { method: 'PUT', body: JSON.stringify({ items }) }),
 
   // Orders
