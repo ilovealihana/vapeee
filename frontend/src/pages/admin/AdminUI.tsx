@@ -1,7 +1,36 @@
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import Icon from '../../components/Icon';
 import { useI18n } from '../../i18n';
 import { useUserStore } from '../../store/user';
+
+let adminModalOpenCount = 0;
+let previousBodyOverflow = '';
+let previousHtmlOverflow = '';
+
+function useAdminModalBodyLock() {
+  useEffect(() => {
+    if (typeof document === 'undefined') return undefined;
+
+    if (adminModalOpenCount === 0) {
+      previousBodyOverflow = document.body.style.overflow;
+      previousHtmlOverflow = document.documentElement.style.overflow;
+      document.body.style.overflow = 'hidden';
+      document.documentElement.style.overflow = 'hidden';
+    }
+
+    adminModalOpenCount += 1;
+
+    return () => {
+      adminModalOpenCount = Math.max(0, adminModalOpenCount - 1);
+      if (adminModalOpenCount === 0) {
+        document.body.style.overflow = previousBodyOverflow;
+        document.documentElement.style.overflow = previousHtmlOverflow;
+        previousBodyOverflow = '';
+        previousHtmlOverflow = '';
+      }
+    };
+  }, []);
+}
 
 type AdminPageHeaderProps = {
   title: string;
@@ -34,6 +63,7 @@ type AdminModalProps = {
 export function AdminModal({ title, subtitle, onClose, children, footer }: AdminModalProps) {
   const activeLocale = useUserStore((state) => state.activeLocale);
   const { t } = useI18n(activeLocale);
+  useAdminModalBodyLock();
 
   return (
     <div className="admin-modal-overlay" onClick={onClose}>
@@ -71,6 +101,7 @@ export function AdminConfirmDialog({
 }: AdminConfirmDialogProps) {
   const activeLocale = useUserStore((state) => state.activeLocale);
   const { t } = useI18n(activeLocale);
+  useAdminModalBodyLock();
 
   return (
     <div className="admin-modal-overlay" onClick={onCancel}>

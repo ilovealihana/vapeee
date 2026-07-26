@@ -86,6 +86,7 @@ test('admin product requests page is routed and uses cms/i18n patterns', () => {
 test('admin product request page keeps create and verdict actions in modals', () => {
   assert.match(productRequestsSource, /creating && \(/);
   assert.match(productRequestsSource, /reviewing && \(/);
+  assert.match(productRequestsSource, /className="admin-page-actions admin-product-request-create-actions"/);
   assert.match(productRequestsSource, /className="admin-request-review-actions"/);
   assert.doesNotMatch(productRequestsSource, /\{canCreate && \(\s*<div className="admin-cms-section">/);
   assert.doesNotMatch(productRequestsSource, /actions\.canApprove[\s\S]{0,500}<button className="admin-[^"]*button"/);
@@ -94,6 +95,17 @@ test('admin product request page keeps create and verdict actions in modals', ()
   assert.match(productRequestsSource, /onClose=\{closeReviewModal\}/);
   assert.match(productRequestsSource, /if \(isReviewVerdictPending\) return/);
   assert.match(productRequestsSource, /setReviewCloseError\(e\.message\)/);
+});
+
+test('admin product request modal UI keeps spacing alignment and background lock contracts', () => {
+  assert.match(css, /\.admin-product-request-create-actions\s*\{[\s\S]*margin-bottom:\s*14px;/);
+  assert.match(css, /\.admin-modal-overlay\s*\{[\s\S]*overscroll-behavior:\s*contain;/);
+  assert.match(css, /\.admin-modal\s*,\s*\.admin-confirm-dialog\s*\{[\s\S]*overscroll-behavior:\s*contain;/);
+  assert.match(css, /\.admin-modal-footer\s*\{[\s\S]*display:\s*flex;[\s\S]*align-items:\s*stretch;[\s\S]*gap:\s*10px;/);
+  assert.match(css, /\.admin-modal-footer\s*>\s*\.admin-request-review-actions\s*\{[\s\S]*flex:\s*1;/);
+  assert.match(uiSource, /let adminModalOpenCount = 0/);
+  assert.match(uiSource, /document\.body\.style\.overflow = 'hidden'/);
+  assert.match(uiSource, /document\.body\.style\.overflow = previousBodyOverflow/);
 });
 
 test('admin product request review loop frontend contract is exposed', () => {

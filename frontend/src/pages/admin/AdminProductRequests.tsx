@@ -361,7 +361,7 @@ export default function AdminProductRequests() {
       </div>
 
       {canCreate && (
-        <div className="admin-page-actions">
+        <div className="admin-page-actions admin-product-request-create-actions">
           <button className="admin-button admin-button-primary" type="button" onClick={openCreateModal}>
             <Icon name="plus" size={16} /> {t('admin.productRequests.openCreate')}
           </button>

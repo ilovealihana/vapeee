@@ -2032,6 +2032,11 @@ textarea.input {
   gap: 10px;
 }
 
+.admin-product-request-create-actions {
+  margin-bottom: 14px;
+  justify-content: flex-start;
+}
+
 .admin-cms-section {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -2455,6 +2460,7 @@ textarea.input {
   display: flex;
   align-items: flex-end;
   justify-content: center;
+  overscroll-behavior: contain;
 }
 
 .admin-modal,
@@ -2462,6 +2468,7 @@ textarea.input {
   width: min(100%, 620px);
   max-height: calc(100vh - 36px - env(safe-area-inset-top, 0px));
   overflow: auto;
+  overscroll-behavior: contain;
   border: 1px solid #2a2a2a;
   border-radius: 16px;
   background: #151515;
@@ -2505,6 +2512,13 @@ textarea.input {
   padding: 14px 18px calc(14px + env(safe-area-inset-bottom, 0px));
   border-top: 1px solid #2a2a2a;
   background: #151515;
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.admin-modal-footer > .admin-request-review-actions {
+  flex: 1;
 }
 
 .admin-modal-footer .admin-button,
