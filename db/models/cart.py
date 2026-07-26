@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import ForeignKey, Integer
+from sqlalchemy import ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from db.session import Base
@@ -17,6 +17,7 @@ class Cart(Base):
     location_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("locations.id", ondelete="SET NULL"), nullable=True
     )
+    source_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
     user: Mapped["User"] = relationship("User", back_populates="cart")
     items: Mapped[list["CartItem"]] = relationship(

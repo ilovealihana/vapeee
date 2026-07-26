@@ -6,6 +6,7 @@ from db.models.category import Category
 from db.models.city import City
 from db.models.location import Location
 from db.models.location_stock import LocationStock
+from db.models.inpost_stock import InpostStock
 from db.models.order import Order
 from db.models.order_item import OrderItem
 from db.models.product import Product
@@ -22,6 +23,7 @@ __all__ = [
     "City",
     "Location",
     "LocationStock",
+    "InpostStock",
     "Order",
     "OrderItem",
     "Product",

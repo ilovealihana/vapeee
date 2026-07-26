@@ -19,6 +19,7 @@ class Order(Base):
     location_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("locations.id", ondelete="SET NULL"), nullable=True
     )
+    source_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
     delivery_type: Mapped[str] = mapped_column(String(16), nullable=False)
     # 'pickup' | 'inpost'
 
@@ -43,6 +44,10 @@ class Order(Base):
     payment_method: Mapped[str] = mapped_column(String(32), nullable=False)
     # 'cash' | 'blik' | 'monobank'
 
+    inpost_delivery_method: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    inpost_point_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    inpost_point_label: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    inpost_courier_address_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
