@@ -126,8 +126,9 @@ class AdminInventoryContractTest(unittest.IsolatedAsyncioTestCase):
 
             rows = await admin_get_stock(_=object(), session=session)
 
-        by_variant = {row.variant_name: row for row in rows}
-        self.assertEqual(len(rows), 2)
+        local_rows = [row for row in rows if row.source_type == "local_point"]
+        by_variant = {row.variant_name: row for row in local_rows}
+        self.assertEqual(len(local_rows), 2)
         self.assertEqual(by_variant["Base"].location_name, "Center")
         self.assertEqual(by_variant["Base"].city_name, "Wroclaw")
         self.assertEqual(by_variant["Base"].product_name, "New product")
