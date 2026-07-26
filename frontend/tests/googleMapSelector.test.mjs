@@ -28,6 +28,13 @@ test('google map selector handles empty coordinates and missing window.google sa
   assert.match(componentSource, /setMapState\('unavailable'\)/);
 });
 
+test('google map selector fails visibly instead of staying on a blank loading canvas', () => {
+  assert.match(componentSource, /GOOGLE_MAPS_LOAD_TIMEOUT_MS/);
+  assert.match(componentSource, /gm_authFailure/);
+  assert.match(componentSource, /google-map-selector-loading/);
+  assert.match(componentSource, /Promise\.race/);
+});
+
 test('catalog selector delegates map tab rendering to GoogleMapSelector', () => {
   assert.match(selectorSource, /import GoogleMapSelector from '\.\.\/components\/GoogleMapSelector';/);
   assert.match(selectorSource, /<GoogleMapSelector/);

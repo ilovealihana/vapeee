@@ -684,6 +684,22 @@ body {
   font-size: 13px;
 }
 
+.google-map-selector-loading {
+  display: inline-grid;
+  justify-items: center;
+  gap: 8px;
+  color: #a4a4a6;
+}
+
+.google-map-selector-loading svg {
+  color: #8dd2d7;
+}
+
+.google-map-selector-loading strong {
+  color: #e2e2e3;
+  font-size: 14px;
+}
+
 .google-map-selector-state {
   display: grid;
   place-items: center;

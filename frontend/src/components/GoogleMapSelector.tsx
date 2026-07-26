@@ -5,6 +5,7 @@ import { useUserStore } from '../store/user';
 import Icon from './Icon';
 
 type MapState = 'loading' | 'ready' | 'unavailable' | 'empty';
+const GOOGLE_MAPS_LOAD_TIMEOUT_MS = 7000;
 
 type GoogleLatLng = { lat: number; lng: number };
 
@@ -17,6 +18,7 @@ type GoogleMapsApi = {
 
 type GoogleWindow = Window & {
   google?: GoogleMapsApi;
+  gm_authFailure?: () => void;
 };
 
 export type GoogleMapMarkerPoint = {
@@ -65,6 +67,8 @@ function ensureGoogleScript(key: string): Promise<void> {
 
   const existing = document.querySelector<HTMLScriptElement>('script[data-google-maps-selector="true"]');
   if (existing) {
+    if (existing.dataset.googleMapsLoaded === 'true' && win.google?.maps?.Map) return Promise.resolve();
+    if (existing.dataset.googleMapsFailed === 'true') return Promise.reject(new Error('google maps load failed'));
     return new Promise((resolve, reject) => {
       existing.addEventListener('load', () => resolve(), { once: true });
       existing.addEventListener('error', () => reject(new Error('google maps load failed')), { once: true });
@@ -77,10 +81,26 @@ function ensureGoogleScript(key: string): Promise<void> {
     script.async = true;
     script.defer = true;
     script.dataset.googleMapsSelector = 'true';
-    script.addEventListener('load', () => resolve(), { once: true });
-    script.addEventListener('error', () => reject(new Error('google maps load failed')), { once: true });
+    script.addEventListener('load', () => {
+      script.dataset.googleMapsLoaded = 'true';
+      if (win.google?.maps?.Map) resolve();
+      else reject(new Error('google maps unavailable after load'));
+    }, { once: true });
+    script.addEventListener('error', () => {
+      script.dataset.googleMapsFailed = 'true';
+      reject(new Error('google maps load failed'));
+    }, { once: true });
     document.head.appendChild(script);
   });
+}
+
+function withGoogleMapsTimeout(promise: Promise<void>): Promise<void> {
+  return Promise.race([
+    promise,
+    new Promise<void>((_, reject) => {
+      window.setTimeout(() => reject(new Error('google maps load timeout')), GOOGLE_MAPS_LOAD_TIMEOUT_MS);
+    }),
+  ]);
 }
 
 export default function GoogleMapSelector({ cities, onSelectLocation }: GoogleMapSelectorProps) {
@@ -102,29 +122,41 @@ export default function GoogleMapSelector({ cities, onSelectLocation }: GoogleMa
     }
 
     let cancelled = false;
+    const win = mapsWindow();
+    const previousAuthFailure = win?.gm_authFailure;
+    const authFailureHandler = () => {
+      previousAuthFailure?.();
+      if (!cancelled) setMapState('unavailable');
+    };
+    if (win) win.gm_authFailure = authFailureHandler;
+
     setMapState('loading');
-    ensureGoogleScript(key)
+    withGoogleMapsTimeout(ensureGoogleScript(key))
       .then(() => {
         if (cancelled) return;
-        const win = mapsWindow();
+        const nextWin = mapsWindow();
         const node = mapRef.current;
-        if (!win?.google?.maps?.Map || !win.google.maps.Marker || !node) {
+        if (!nextWin?.google?.maps?.Map || !nextWin.google.maps.Marker || !node) {
           setMapState('unavailable');
           return;
         }
-        const map = new win.google.maps.Map(node, {
-          center: markers[0].position,
-          zoom: 12,
-          disableDefaultUI: true,
-        });
-        markers.forEach((marker) => {
-          new win.google!.maps!.Marker({
-            position: marker.position,
-            map,
-            title: marker.name,
+        try {
+          const map = new nextWin.google.maps.Map(node, {
+            center: markers[0].position,
+            zoom: 12,
+            disableDefaultUI: true,
           });
-        });
-        setMapState('ready');
+          markers.forEach((marker) => {
+            new nextWin.google!.maps!.Marker({
+              position: marker.position,
+              map,
+              title: marker.name,
+            });
+          });
+          setMapState('ready');
+        } catch {
+          setMapState('unavailable');
+        }
       })
       .catch(() => {
         if (!cancelled) setMapState('unavailable');
@@ -132,6 +164,7 @@ export default function GoogleMapSelector({ cities, onSelectLocation }: GoogleMa
 
     return () => {
       cancelled = true;
+      if (win?.gm_authFailure === authFailureHandler) win.gm_authFailure = previousAuthFailure;
     };
   }, [markers]);
 
@@ -158,7 +191,12 @@ export default function GoogleMapSelector({ cities, onSelectLocation }: GoogleMa
   return (
     <section className="google-map-selector">
       <div className="google-map-selector-canvas" ref={mapRef}>
-        {mapState === 'loading' && <span>{t('common.loading')}</span>}
+        {mapState === 'loading' && (
+          <span className="google-map-selector-loading">
+            <Icon name="mapPin" size={24} />
+            <strong>{t('common.loading')}</strong>
+          </span>
+        )}
       </div>
       <div className="google-map-selector-points">
         {markers.map((marker) => (
