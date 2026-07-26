@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { CatalogSourceLocation } from '../api/client';
 import CopiedBottomNav from '../components/CopiedBottomNav';
+import GoogleMapSelector from '../components/GoogleMapSelector';
 import CopiedPageTitle from '../components/CopiedPageTitle';
 import CopiedSmokeBackground from '../components/CopiedSmokeBackground';
 import CopiedTopBar from '../components/CopiedTopBar';
@@ -150,11 +151,10 @@ export default function CatalogSelector() {
           {loading && <div className="spinner" />}
 
           {!loading && sources && activeTab === 'map' && (
-            <section className="source-selector-map-fallback">
-              <Icon name="mapPin" size={28} />
-              <strong>{t('catalogSelector.mapPendingTitle')}</strong>
-              <p>{t('catalogSelector.mapPendingDescription')}</p>
-            </section>
+            <GoogleMapSelector
+              cities={sources.cities}
+              onSelectLocation={(location) => chooseSource(sourceFromApiLocation(location), `local-${location.id}`)}
+            />
           )}
 
           {!loading && sources && activeTab === 'list' && (

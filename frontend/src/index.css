@@ -639,6 +639,88 @@ body {
   color: #f0b3b3;
 }
 
+.google-map-selector {
+  display: grid;
+  gap: 12px;
+}
+
+.google-map-selector-canvas,
+.google-map-selector-state {
+  min-height: 260px;
+  border: 1px dashed rgba(141, 210, 215, 0.32);
+  border-radius: 16px;
+  background: rgba(30, 32, 33, 0.58);
+  overflow: hidden;
+}
+
+.google-map-selector-canvas {
+  display: grid;
+  place-items: center;
+  color: #a4a4a6;
+  font-size: 13px;
+}
+
+.google-map-selector-state {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  padding: 24px;
+  color: #a4a4a6;
+  text-align: center;
+}
+
+.google-map-selector-state svg {
+  color: #8dd2d7;
+}
+
+.google-map-selector-state strong {
+  color: #e2e2e3;
+  font-size: 16px;
+}
+
+.google-map-selector-state p {
+  max-width: 280px;
+  margin: 0;
+  color: #a4a4a6;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.google-map-selector-points {
+  display: grid;
+  gap: 8px;
+}
+
+.google-map-selector-points button {
+  min-height: 58px;
+  border: 1px solid rgba(63, 72, 73, 0.42);
+  border-radius: 12px;
+  background: rgba(30, 32, 33, 0.78);
+  color: #e2e2e3;
+  padding: 11px 12px;
+  display: grid;
+  gap: 3px;
+  text-align: left;
+}
+
+.google-map-selector-points strong,
+.google-map-selector-points small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.google-map-selector-points strong {
+  font-size: 14px;
+}
+
+.google-map-selector-points small {
+  color: #a4a4a6;
+  font-size: 12px;
+}
+
 .catalog-view-toggle {
   position: relative;
   flex: 0 0 auto;

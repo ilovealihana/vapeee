@@ -197,7 +197,7 @@ test('customer React page i18n keys resolve to ru strings', async () => {
       for (const match of source.matchAll(/\bt\('([^']+)'\)/g)) {
         keys.add(match[1]);
       }
-      for (const match of source.matchAll(/['"]((?:common|nav|home|catalog|catalogSelector|cart|checkout|cities|locations|productDetail|orderSuccess|product|profile|admin|errors|validation)\.[^'"]+)['"]/g)) {
+      for (const match of source.matchAll(/['"]((?:common|nav|home|catalog|catalogSelector|googleMap|cart|checkout|cities|locations|productDetail|orderSuccess|product|profile|admin|errors|validation)\.[^'"]+)['"]/g)) {
         keys.add(match[1]);
       }
     }

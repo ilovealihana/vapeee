@@ -85,6 +85,12 @@ const ru = {
       inactive: 'Недоступно',
     },
   },
+  googleMap: {
+    unavailableTitle: 'Карта недоступна',
+    unavailableDescription: 'Google Maps ключ не настроен. Используйте список точек.',
+    emptyTitle: 'Нет координат',
+    emptyDescription: 'У точек пока нет координат для отображения на карте.',
+  },
   product: {
     add: 'Добавить',
     inStock: 'В наличии',
