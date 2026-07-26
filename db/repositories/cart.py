@@ -13,7 +13,12 @@ class CartRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    async def get_or_create(self, user_id: int, location_id: int | None = None) -> Cart:
+    async def get_or_create(
+        self,
+        user_id: int,
+        location_id: int | None = None,
+        source_type: str | None = None,
+    ) -> Cart:
         result = await self.session.execute(
             select(Cart)
             .where(Cart.user_id == user_id)
@@ -21,7 +26,7 @@ class CartRepository:
         )
         cart = result.scalar_one_or_none()
         if cart is None:
-            cart = Cart(user_id=user_id, location_id=location_id)
+            cart = Cart(user_id=user_id, location_id=location_id, source_type=source_type)
             self.session.add(cart)
             await self.session.commit()
             await self.session.refresh(cart)
@@ -80,13 +85,29 @@ class CartRepository:
             await self.session.commit()
 
     async def clear(self, cart_id: int) -> None:
+        cart_result = await self.session.execute(select(Cart).where(Cart.id == cart_id))
+        cart = cart_result.scalar_one_or_none()
         result = await self.session.execute(
             select(CartItem).where(CartItem.cart_id == cart_id)
         )
         for item in result.scalars().all():
             await self.session.delete(item)
+        if cart is not None:
+            cart.location_id = None
+            cart.source_type = None
         await self.session.commit()
 
     async def set_location(self, cart: Cart, location_id: int | None) -> None:
+        cart.location_id = location_id
+        cart.source_type = "local_point" if location_id is not None else None
+        await self.session.commit()
+
+    async def set_source(
+        self,
+        cart: Cart,
+        source_type: str | None,
+        location_id: int | None = None,
+    ) -> None:
+        cart.source_type = source_type
         cart.location_id = location_id
         await self.session.commit()

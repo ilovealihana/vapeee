@@ -191,6 +191,19 @@ class CartItemSchema(BaseModel):
     product: Optional[ProductSchema] = None
     price: Optional[Decimal] = None
     subtotal: Optional[Decimal] = None
+    availability: Optional["CartItemAvailabilitySchema"] = None
+
+
+class CartSourceSchema(BaseModel):
+    type: str
+    location_id: Optional[int] = None
+    status: str
+
+
+class CartItemAvailabilitySchema(BaseModel):
+    active: bool
+    reason: Optional[str] = None
+    available_quantity: int
 
 
 class CartSchema(BaseModel):
@@ -199,6 +212,7 @@ class CartSchema(BaseModel):
     id: int
     user_id: int
     location_id: Optional[int]
+    source: Optional[CartSourceSchema] = None
     items: List[CartItemSchema] = []
     total: Decimal = Decimal("0")
 
@@ -207,6 +221,7 @@ class AddCartItemRequest(BaseModel):
     variant_id: int
     quantity: int = 1
     location_id: Optional[int] = None
+    source_type: Optional[str] = None
 
 
 class UpdateCartItemRequest(BaseModel):
