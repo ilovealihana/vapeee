@@ -66,6 +66,7 @@ export default function AdminProductRequests() {
   const [requests, setRequests] = useState<AdminProductRequest[]>([]);
   const [options, setOptions] = useState<ProductRequestOptions>({ locations: [], products: [] });
   const [form, setForm] = useState<FormState>(initialForm);
+  const [creating, setCreating] = useState(false);
   const [mode, setMode] = useState<RequestMode>('active');
   const [activeFilter, setActiveFilter] = useState<ActiveFilter>('all');
   const [archiveFilter, setArchiveFilter] = useState<ArchiveFilter>('all');
@@ -76,6 +77,8 @@ export default function AdminProductRequests() {
   const [success, setSuccess] = useState('');
   const [rejecting, setRejecting] = useState<AdminProductRequest | null>(null);
   const [requestingChanges, setRequestingChanges] = useState<AdminProductRequest | null>(null);
+  const [reviewing, setReviewing] = useState<AdminProductRequest | null>(null);
+  const [reviewCloseError, setReviewCloseError] = useState('');
   const [editing, setEditing] = useState<AdminProductRequest | null>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [changesComment, setChangesComment] = useState('');
@@ -127,6 +130,22 @@ export default function AdminProductRequests() {
   const statusLabel = (status: string) => t(`admin.productRequests.status.${status}`);
   const canCreate = adminRole === 'point_manager';
   const canReview = adminRole === 'project_admin' || adminRole === 'city_curator';
+  const reviewingOwnEditable = Boolean(reviewing) && (
+    adminRole === 'project_admin'
+    || adminRole === 'city_curator'
+    || reviewing?.requester_tg_id === currentTgId
+  );
+  const reviewActions = reviewing
+    ? getProductRequestActions({ role: adminRole, currentTgId, request: reviewing, isOwnEditableRequest: reviewingOwnEditable })
+    : null;
+  const isReviewVerdictPending = Boolean(
+    reviewing
+    && (
+      pendingActionId === `${reviewing.id}:approve`
+      || pendingActionId === `${reviewing.id}:reject`
+      || pendingActionId === `${reviewing.id}:need_changes`
+    ),
+  );
 
   const setField = (key: keyof FormState, value: string) => {
     setForm((current) => ({
@@ -153,6 +172,51 @@ export default function AdminProductRequests() {
     }
   };
 
+  const openCreateModal = () => {
+    setError('');
+    setSuccess('');
+    setCreating(true);
+  };
+
+  const closeCreateModal = () => {
+    setCreating(false);
+  };
+
+  const findRequest = (requestId: number, fallback: AdminProductRequest) =>
+    requests.find((request) => request.id === requestId) || fallback;
+
+  const lockForReview = async (request: AdminProductRequest, action = 'lock') => {
+    setPendingActionId(`${request.id}:${action}`);
+    setError('');
+    setSuccess('');
+    try {
+      const locked = await adminApi.lockProductRequest(request.id);
+      setReviewCloseError('');
+      setReviewing(locked);
+      setReviewing((current) => current || findRequest(request.id, request));
+      await load();
+    } catch (e: any) {
+      setError(e.message);
+    }
+    setPendingActionId(null);
+  };
+
+  const closeReviewModal = async () => {
+    if (!reviewing) return;
+    if (isReviewVerdictPending) return;
+    if (pendingActionId === `${reviewing.id}:release`) return;
+    setReviewCloseError('');
+    setPendingActionId(`${reviewing.id}:release`);
+    try {
+      await adminApi.releaseProductRequest(reviewing.id);
+      setReviewing(null);
+      await load();
+    } catch (e: any) {
+      setReviewCloseError(e.message);
+    }
+    setPendingActionId(null);
+  };
+
   const submit = async () => {
     setSaving(true);
     setError('');
@@ -175,6 +239,7 @@ export default function AdminProductRequests() {
     try {
       await adminApi.createProductRequest(payload);
       setForm((current) => ({ ...initialForm, location_id: current.location_id, product_id: current.product_id }));
+      setCreating(false);
       setSuccess(t('admin.productRequests.created'));
       await load();
     } catch (e: any) {
@@ -192,6 +257,7 @@ export default function AdminProductRequests() {
       'admin.productRequests.rejected',
     );
     if (!ok) return;
+    setReviewing(null);
     setRejecting(null);
     setRejectReason('');
   };
@@ -205,8 +271,20 @@ export default function AdminProductRequests() {
       'admin.productRequests.changesRequested',
     );
     if (!ok) return;
+    setReviewing(null);
     setRequestingChanges(null);
     setChangesComment('');
+  };
+
+  const approve = async (request: AdminProductRequest) => {
+    const ok = await runAction(
+      request,
+      'approve',
+      () => adminApi.approveProductRequest(request.id),
+      'admin.productRequests.approved',
+    );
+    if (!ok) return;
+    setReviewing(null);
   };
 
   const openEdit = (request: AdminProductRequest) => {
@@ -283,64 +361,10 @@ export default function AdminProductRequests() {
       </div>
 
       {canCreate && (
-        <div className="admin-cms-section">
-        <div className="admin-cms-section-header">
-          <h3>{t('admin.productRequests.newTitle')}</h3>
-          <span>{t('admin.productRequests.newSubtitle')}</span>
-        </div>
-        <div className="admin-form-grid">
-          <div className="input-group">
-            <label className="input-label">{t('admin.productRequests.fields.type')}</label>
-            <select className="input" value={form.request_type} onChange={event => setField('request_type', event.target.value as ProductRequestType)}>
-              <option value="ADD_VARIANT">{requestTypeLabel('ADD_VARIANT')}</option>
-              <option value="ADD_STOCK">{requestTypeLabel('ADD_STOCK')}</option>
-            </select>
-          </div>
-          <div className="input-group">
-            <label className="input-label">{t('admin.productRequests.fields.location')}</label>
-            <select className="input" value={form.location_id} onChange={event => setField('location_id', event.target.value)}>
-              {options.locations.map((location) => (
-                <option key={location.id} value={location.id}>{location.city_name} - {location.name}</option>
-              ))}
-            </select>
-          </div>
-          <div className="input-group">
-            <label className="input-label">{t('admin.productRequests.fields.product')}</label>
-            <select className="input" value={form.product_id} onChange={event => setField('product_id', event.target.value)}>
-              {options.products.map((product) => (
-                <option key={product.id} value={product.id}>{product.name_ru}</option>
-              ))}
-            </select>
-          </div>
-          {form.request_type === 'ADD_STOCK' ? (
-            <div className="input-group">
-              <label className="input-label">{t('admin.productRequests.fields.variant')}</label>
-              <select className="input" value={form.variant_id} onChange={event => setField('variant_id', event.target.value)}>
-                {selectedVariants.map((variant) => (
-                  <option key={variant.id} value={variant.id}>{variant.name_ru}</option>
-                ))}
-              </select>
-            </div>
-          ) : (
-            <div className="input-group">
-              <label className="input-label">{t('admin.productRequests.fields.variantName')}</label>
-              <input className="input" value={form.variant_name} onChange={event => setField('variant_name', event.target.value)} placeholder={t('admin.productRequests.placeholders.variantName')} />
-            </div>
-          )}
-          <div className="input-group">
-            <label className="input-label">{t('admin.productRequests.fields.quantity')}</label>
-            <input className="input" type="text" inputMode="numeric" pattern="[0-9]*" value={form.quantity} onChange={event => setField('quantity', event.target.value)} />
-          </div>
-          {form.request_type === 'ADD_VARIANT' && (
-            <div className="input-group">
-              <label className="input-label">{t('admin.productRequests.fields.price')}</label>
-              <input className="input" type="text" inputMode="decimal" value={form.price_override} onChange={event => setField('price_override', event.target.value)} placeholder={t('admin.productRequests.placeholders.price')} />
-            </div>
-          )}
-        </div>
-        <button className="admin-button admin-button-primary" type="button" disabled={!canSubmit || saving} onClick={submit}>
-          <Icon name="plus" size={16} /> {saving ? t('admin.productRequests.saving') : t('admin.productRequests.create')}
-        </button>
+        <div className="admin-page-actions">
+          <button className="admin-button admin-button-primary" type="button" onClick={openCreateModal}>
+            <Icon name="plus" size={16} /> {t('admin.productRequests.openCreate')}
+          </button>
         </div>
       )}
 
@@ -369,36 +393,16 @@ export default function AdminProductRequests() {
                   {request.locked_by_tg_id && <span>{t('admin.productRequests.lockedBy').replace('{id}', String(request.locked_by_tg_id))}</span>}
                   <AdminStatusBadge status={request.status} label={statusLabel(request.status)} />
                 </div>
-                {(canReview || actions.canEdit) && (
+                {((canReview && (actions.canLock || actions.canTakeover)) || actions.canEdit) && (
                   <div className="admin-request-actions admin-row-actions">
                     {actions.canLock && (
-                      <button className="admin-button admin-button-secondary" type="button" disabled={isBusy('lock')} onClick={() => runAction(request, 'lock', () => adminApi.lockProductRequest(request.id), 'admin.productRequests.locked')}>
+                      <button className="admin-button admin-button-secondary" type="button" disabled={isBusy('lock')} onClick={() => lockForReview(request, 'lock')}>
                         <Icon name="shield" size={16} /> {t('admin.productRequests.actions.takeReview')}
                       </button>
                     )}
                     {actions.canTakeover && (
-                      <button className="admin-button admin-button-secondary" type="button" disabled={isBusy('lock')} onClick={() => runAction(request, 'lock', () => adminApi.lockProductRequest(request.id), 'admin.productRequests.locked')}>
+                      <button className="admin-button admin-button-secondary" type="button" disabled={isBusy('takeover')} onClick={() => lockForReview(request, 'takeover')}>
                         <Icon name="shield" size={16} /> {t('admin.productRequests.actions.takeover')}
-                      </button>
-                    )}
-                    {actions.canApprove && (
-                      <button className="admin-icon-button" type="button" disabled={isBusy('approve')} onClick={() => runAction(request, 'approve', () => adminApi.approveProductRequest(request.id), 'admin.productRequests.approved')} aria-label={t('admin.productRequests.approveAria')}>
-                        <Icon name="check" size={16} />
-                      </button>
-                    )}
-                    {actions.canRequestChanges && (
-                      <button className="admin-button admin-button-secondary" type="button" disabled={isBusy('need_changes')} onClick={() => setRequestingChanges(request)}>
-                        <Icon name="edit" size={16} /> {t('admin.productRequests.actions.needChanges')}
-                      </button>
-                    )}
-                    {actions.canReject && (
-                      <button className="admin-icon-button" type="button" disabled={isBusy('reject')} onClick={() => setRejecting(request)} aria-label={t('admin.productRequests.rejectAria')}>
-                        <Icon name="x" size={16} />
-                      </button>
-                    )}
-                    {actions.canRelease && (
-                      <button className="admin-button admin-button-secondary" type="button" disabled={isBusy('release')} onClick={() => runAction(request, 'release', () => adminApi.releaseProductRequest(request.id), 'admin.productRequests.released')}>
-                        <Icon name="x" size={16} /> {t('admin.productRequests.actions.releaseLock')}
                       </button>
                     )}
                     {actions.canEdit && request.status === 'need_changes' && (
@@ -412,6 +416,112 @@ export default function AdminProductRequests() {
             );
           })}
         </div>
+      )}
+
+      {creating && (
+        <AdminModal
+          title={t('admin.productRequests.newTitle')}
+          subtitle={t('admin.productRequests.newSubtitle')}
+          onClose={closeCreateModal}
+          footer={(
+            <>
+              <button className="admin-button admin-button-secondary" type="button" onClick={closeCreateModal}>{t('admin.common.cancel')}</button>
+              <button className="admin-button admin-button-primary" type="button" disabled={!canSubmit || saving} onClick={submit}>
+                <Icon name="plus" size={16} /> {saving ? t('admin.productRequests.saving') : t('admin.productRequests.create')}
+              </button>
+            </>
+          )}
+        >
+          <div className="admin-form-grid">
+            <div className="input-group">
+              <label className="input-label">{t('admin.productRequests.fields.type')}</label>
+              <select className="input" value={form.request_type} onChange={event => setField('request_type', event.target.value as ProductRequestType)}>
+                <option value="ADD_VARIANT">{requestTypeLabel('ADD_VARIANT')}</option>
+                <option value="ADD_STOCK">{requestTypeLabel('ADD_STOCK')}</option>
+              </select>
+            </div>
+            <div className="input-group">
+              <label className="input-label">{t('admin.productRequests.fields.location')}</label>
+              <select className="input" value={form.location_id} onChange={event => setField('location_id', event.target.value)}>
+                {options.locations.map((location) => (
+                  <option key={location.id} value={location.id}>{location.city_name} - {location.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="input-group">
+              <label className="input-label">{t('admin.productRequests.fields.product')}</label>
+              <select className="input" value={form.product_id} onChange={event => setField('product_id', event.target.value)}>
+                {options.products.map((product) => (
+                  <option key={product.id} value={product.id}>{product.name_ru}</option>
+                ))}
+              </select>
+            </div>
+            {form.request_type === 'ADD_STOCK' ? (
+              <div className="input-group">
+                <label className="input-label">{t('admin.productRequests.fields.variant')}</label>
+                <select className="input" value={form.variant_id} onChange={event => setField('variant_id', event.target.value)}>
+                  {selectedVariants.map((variant) => (
+                    <option key={variant.id} value={variant.id}>{variant.name_ru}</option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div className="input-group">
+                <label className="input-label">{t('admin.productRequests.fields.variantName')}</label>
+                <input className="input" value={form.variant_name} onChange={event => setField('variant_name', event.target.value)} placeholder={t('admin.productRequests.placeholders.variantName')} />
+              </div>
+            )}
+            <div className="input-group">
+              <label className="input-label">{t('admin.productRequests.fields.quantity')}</label>
+              <input className="input" type="text" inputMode="numeric" pattern="[0-9]*" value={form.quantity} onChange={event => setField('quantity', event.target.value)} />
+            </div>
+            {form.request_type === 'ADD_VARIANT' && (
+              <div className="input-group">
+                <label className="input-label">{t('admin.productRequests.fields.price')}</label>
+                <input className="input" type="text" inputMode="decimal" value={form.price_override} onChange={event => setField('price_override', event.target.value)} placeholder={t('admin.productRequests.placeholders.price')} />
+              </div>
+            )}
+          </div>
+        </AdminModal>
+      )}
+
+      {reviewing && (
+        <AdminModal
+          title={t('admin.productRequests.reviewTitle')}
+          subtitle={reviewing.product_name || t('admin.productRequests.productFallback')}
+          onClose={closeReviewModal}
+          footer={(
+            <div className="admin-request-review-actions">
+              {reviewActions?.canApprove && (
+                <button className="admin-button admin-button-primary" type="button" disabled={pendingActionId === `${reviewing.id}:approve`} onClick={() => approve(reviewing)}>
+                  <Icon name="check" size={16} /> {t('admin.productRequests.approve')}
+                </button>
+              )}
+              {reviewActions?.canRequestChanges && (
+                <button className="admin-button admin-button-secondary" type="button" disabled={pendingActionId === `${reviewing.id}:need_changes`} onClick={() => setRequestingChanges(reviewing)}>
+                  <Icon name="edit" size={16} /> {t('admin.productRequests.actions.needChanges')}
+                </button>
+              )}
+              {reviewActions?.canReject && (
+                <button className="admin-button admin-button-danger" type="button" disabled={pendingActionId === `${reviewing.id}:reject`} onClick={() => setRejecting(reviewing)}>
+                  <Icon name="x" size={16} /> {t('admin.productRequests.reject')}
+                </button>
+              )}
+              <button className="admin-button admin-button-secondary" type="button" disabled={isReviewVerdictPending || pendingActionId === `${reviewing.id}:release`} onClick={closeReviewModal}>
+                <Icon name="x" size={16} /> {t('admin.productRequests.release')}
+              </button>
+            </div>
+          )}
+        >
+          {reviewCloseError && <p className="admin-message admin-message-error">{reviewCloseError}</p>}
+          <div className="admin-request-review-details">
+            <p><strong>{t('admin.productRequests.fields.location')}</strong><span>{reviewing.location_name || t('admin.productRequests.locationFallback')}</span></p>
+            <p><strong>{t('admin.productRequests.fields.type')}</strong><span>{requestTypeLabel(reviewing.request_type)}</span></p>
+            <p><strong>{t('admin.productRequests.fields.variant')}</strong><span>{reviewing.variant_name || reviewing.variant_name_ru || t('admin.productRequests.variantFallback')}</span></p>
+            <p><strong>{t('admin.productRequests.fields.quantity')}</strong><span>{String(reviewing.quantity)}</span></p>
+            {reviewing.review_comment && <p><strong>{t('admin.productRequests.fields.latestComment')}</strong><span>{reviewing.review_comment}</span></p>}
+          </div>
+        </AdminModal>
       )}
 
       {rejecting && (

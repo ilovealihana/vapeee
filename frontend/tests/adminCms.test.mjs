@@ -72,6 +72,28 @@ test('admin product requests page is routed and uses cms/i18n patterns', () => {
   assert.match(productRequestsSource, /const canReview = adminRole === 'project_admin' \|\| adminRole === 'city_curator'/);
   assert.match(productRequestsSource, /\{canCreate && \(/);
   assert.match(productRequestsSource, /getProductRequestActions\(\{ role: adminRole, currentTgId, request, isOwnEditableRequest \}\)/);
+  assert.match(productRequestsSource, /const \[creating,\s*setCreating\] = useState\(false\)/);
+  assert.match(productRequestsSource, /const \[reviewing,\s*setReviewing\] = useState<AdminProductRequest \| null>\(null\)/);
+  assert.match(productRequestsSource, /openCreateModal/);
+  assert.match(productRequestsSource, /closeReviewModal/);
+  assert.match(productRequestsSource, /isReviewVerdictPending/);
+  assert.match(productRequestsSource, /adminApi\.releaseProductRequest\(reviewing\.id\)/);
+  assert.match(productRequestsSource, /setReviewing\(locked\)/);
+  assert.match(productRequestsSource, /t\('admin\.productRequests\.openCreate'\)/);
+  assert.match(productRequestsSource, /t\('admin\.productRequests\.reviewTitle'\)/);
+});
+
+test('admin product request page keeps create and verdict actions in modals', () => {
+  assert.match(productRequestsSource, /creating && \(/);
+  assert.match(productRequestsSource, /reviewing && \(/);
+  assert.match(productRequestsSource, /className="admin-request-review-actions"/);
+  assert.doesNotMatch(productRequestsSource, /\{canCreate && \(\s*<div className="admin-cms-section">/);
+  assert.doesNotMatch(productRequestsSource, /actions\.canApprove[\s\S]{0,500}<button className="admin-[^"]*button"/);
+  assert.doesNotMatch(productRequestsSource, /actions\.canReject[\s\S]{0,500}<button className="admin-[^"]*button"/);
+  assert.doesNotMatch(productRequestsSource, /actions\.canRequestChanges[\s\S]{0,500}<button className="admin-[^"]*button"/);
+  assert.match(productRequestsSource, /onClose=\{closeReviewModal\}/);
+  assert.match(productRequestsSource, /if \(isReviewVerdictPending\) return/);
+  assert.match(productRequestsSource, /setReviewCloseError\(e\.message\)/);
 });
 
 test('admin product request review loop frontend contract is exposed', () => {
@@ -136,9 +158,9 @@ test('admin product requests page wires review loop controls', () => {
   assert.match(productRequestsSource, /setEditing\(request\)/);
   assert.match(productRequestsSource, /editing && editForm && \(/);
   assert.match(productRequestsSource, /request\.status === 'need_changes'/);
-  assert.match(productRequestsSource, /actions\.canApprove/);
-  assert.match(productRequestsSource, /actions\.canReject/);
-  assert.match(productRequestsSource, /actions\.canRequestChanges/);
+  assert.match(productRequestsSource, /reviewActions\?\.canApprove/);
+  assert.match(productRequestsSource, /reviewActions\?\.canReject/);
+  assert.match(productRequestsSource, /reviewActions\?\.canRequestChanges/);
   assert.doesNotMatch(productRequestsSource, /\{canReview && request\.status === 'pending_review' && \(/);
 });
 

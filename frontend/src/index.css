@@ -2089,6 +2089,29 @@ textarea.input {
   justify-content: flex-start;
 }
 
+.admin-request-review-actions {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.admin-request-review-details {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-request-review-details p {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+}
+
+.admin-request-review-details span {
+  color: var(--secondary);
+  overflow-wrap: anywhere;
+}
+
 .admin-cms-titlebar h1 {
   margin: 0;
   font-size: 20px;
@@ -2674,6 +2697,10 @@ textarea.input {
   .admin-page-actions,
   .admin-page-actions .admin-button {
     width: 100%;
+  }
+
+  .admin-request-review-actions {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .admin-cities-row,
