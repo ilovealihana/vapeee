@@ -98,6 +98,8 @@ test('admin product request page keeps create and verdict actions in modals', ()
 });
 
 test('admin product request modal UI keeps spacing alignment and background lock contracts', () => {
+  assert.match(productRequestsSource, /className="admin-product-request-filter-divider"/);
+  assert.match(css, /\.admin-product-request-filter-divider\s*\{[\s\S]*border-top:\s*1px solid var\(--border\);[\s\S]*margin:\s*0 0 16px;/);
   assert.match(css, /\.admin-product-request-create-actions\s*\{[\s\S]*margin-bottom:\s*14px;/);
   assert.match(css, /\.admin-modal-overlay\s*\{[\s\S]*overscroll-behavior:\s*contain;/);
   assert.match(css, /\.admin-modal\s*,\s*\.admin-confirm-dialog\s*\{[\s\S]*overscroll-behavior:\s*contain;/);

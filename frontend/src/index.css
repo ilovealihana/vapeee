@@ -2408,6 +2408,11 @@ textarea.input {
   overflow-x: auto;
 }
 
+.admin-product-request-filter-divider {
+  border-top: 1px solid var(--border);
+  margin: 0 0 16px;
+}
+
 .admin-search-field {
   position: relative;
   width: min(100%, 520px);

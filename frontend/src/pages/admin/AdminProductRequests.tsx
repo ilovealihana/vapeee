@@ -347,6 +347,8 @@ export default function AdminProductRequests() {
         )}
       />
 
+      <div className="admin-product-request-filter-divider" aria-hidden="true" />
+
       <div className="admin-filter-bar">
         {(mode === 'active' ? activeFilters : archiveFilters).map((filter) => (
           <button
