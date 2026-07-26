@@ -570,6 +570,10 @@ body {
   background: rgba(18, 20, 21, 0.58);
 }
 
+.source-selector-city + .source-selector-city {
+  margin-top: 4px;
+}
+
 .source-selector-city-toggle {
   min-height: 62px;
   border: 0;
@@ -599,8 +603,28 @@ body {
 
 .source-selector-point-list {
   display: grid;
-  gap: 10px;
-  padding: 0 10px 10px;
+  grid-template-rows: 0fr;
+  padding: 0 12px;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: grid-template-rows 220ms ease, opacity 180ms ease, padding 220ms ease, visibility 0s linear 220ms;
+}
+
+.source-selector-point-list.is-open {
+  grid-template-rows: 1fr;
+  padding: 12px 12px 14px;
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition: grid-template-rows 220ms ease, opacity 180ms ease, padding 220ms ease, visibility 0s;
+}
+
+.source-selector-point-list-inner {
+  min-height: 0;
+  overflow: hidden;
+  display: grid;
+  gap: 12px;
 }
 
 .source-selector-map-fallback {

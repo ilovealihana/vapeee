@@ -198,11 +198,14 @@ export default function CatalogSelector() {
                     </span>
                     <Icon name={expandedCityId === city.id ? 'minus' : 'plus'} size={18} />
                   </button>
-                  {expandedCityId === city.id && (
-                    <div className="source-selector-point-list">
+                  <div
+                    className={`source-selector-point-list ${expandedCityId === city.id ? 'is-open' : ''}`}
+                    aria-hidden={expandedCityId !== city.id}
+                  >
+                    <div className="source-selector-point-list-inner">
                       {city.locations.map(renderPoint)}
                     </div>
-                  )}
+                  </div>
                 </article>
               ))}
             </section>

@@ -43,6 +43,8 @@ test('selector screen renders in copied catalog shell with list and map tabs', (
   assert.match(selectorSource, /catalogSelector\.localPoints/);
   assert.match(selectorSource, /expandedCityId/);
   assert.match(selectorSource, /setExpandedCityId\(expandedCityId === city\.id \? null : city\.id\)/);
+  assert.match(selectorSource, /source-selector-point-list \$\{expandedCityId === city\.id \? 'is-open' : ''\}/);
+  assert.match(selectorSource, /source-selector-point-list-inner/);
   assert.match(selectorSource, /catalogSelector\.workingHoursFallback/);
   assert.match(selectorSource, /window\.confirm/);
   assert.match(selectorSource, /clearCart/);
@@ -84,6 +86,8 @@ test('selector styles use full-screen copied layout and disabled states', () => 
   assert.match(css, /\.source-selector-city/);
   assert.match(css, /\.source-selector-point\[disabled\]/);
   assert.match(css, /\.source-selector-status/);
+  assert.match(css, /\.source-selector-point-list\.is-open/);
+  assert.match(css, /transition: grid-template-rows/);
 });
 
 test('catalog source store can validate deep-link local point sources', () => {
