@@ -143,7 +143,7 @@ export default function Products() {
       <div className="copied-catalog-shell dark overflow-x-hidden" data-catalog-layout={layout}>
         <div className="relative z-10 flex flex-col min-h-screen w-full">
           <div className="catalog-filter-bar px-margin-page py-3 relative z-10">
-            <button className="back-btn" onClick={() => navigate('/catalog-selector')} aria-label={t('catalogSelector.changeSource')}><Icon name="mapPin" /></button>
+            <button className="back-btn" type="button" onClick={() => navigate('/catalog-selector', { state: { returnTo: '/products' } })} aria-label={t('catalogSelector.changeSource')}><Icon name="mapPin" /></button>
             <div className={`catalog-view-toggle ${layout === 'two' ? 'is-two' : 'is-three'}`} role="group" aria-label={t('catalog.viewToggle')}>
               <button
                 className={`catalog-view-option ${layout === 'two' ? 'is-active' : ''}`}

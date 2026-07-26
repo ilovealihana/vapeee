@@ -36,6 +36,9 @@ test('selector screen renders in copied catalog shell with list and map tabs', (
   assert.match(selectorSource, /CopiedPageTitle activeTab="catalog"/);
   assert.match(selectorSource, /CopiedBottomNav activeTab="catalog"/);
   assert.match(selectorSource, /useCatalogSourceStore/);
+  assert.match(selectorSource, /useLocation/);
+  assert.match(selectorSource, /returnTo: string/);
+  assert.match(selectorSource, /navigate\(backTarget\)/);
   assert.match(selectorSource, /source-selector-tab/);
   assert.match(selectorSource, /catalogSelector\.tabs\.list/);
   assert.match(selectorSource, /catalogSelector\.tabs\.map/);
@@ -55,6 +58,7 @@ test('selector screen renders in copied catalog shell with list and map tabs', (
 
 test('products and product detail load by selected catalog source', () => {
   assert.match(productsSource, /useCatalogSourceStore/);
+  assert.match(productsSource, /navigate\('\/catalog-selector', \{ state: \{ returnTo: '\/products' \} \}\)/);
   assert.match(productsSource, /navigate\('\/catalog-selector', \{ replace: true \}\)/);
   assert.match(productsSource, /api\.catalog\.products\(\{[\s\S]*location_id: sourceForRequest\.type === 'local_point'/);
   assert.match(productsSource, /source: sourceForRequest\.type === 'inpost' \? 'inpost' : undefined/);

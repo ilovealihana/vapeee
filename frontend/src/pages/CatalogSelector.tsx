@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import type { CatalogSourceLocation } from '../api/client';
 import CopiedBottomNav from '../components/CopiedBottomNav';
 import GoogleMapSelector from '../components/GoogleMapSelector';
@@ -13,6 +13,7 @@ import { sourceFromApiLocation, type SelectedCatalog, useCatalogSourceStore } fr
 import { useUserStore } from '../store/user';
 
 type SelectorTab = 'list' | 'map';
+type CatalogSelectorLocationState = { returnTo: string };
 
 function statusKey(status: CatalogSourceLocation['status'] | 'inactive') {
   if (status === 'available') return 'catalogSelector.status.available';
@@ -29,6 +30,7 @@ function isSameSource(a: SelectedCatalog | null, b: SelectedCatalog) {
 
 export default function CatalogSelector() {
   const navigate = useNavigate();
+  const location = useLocation();
   const activeLocale = useUserStore((state) => state.activeLocale);
   const { t } = useI18n(activeLocale);
   const { cart, clearCart, itemCount } = useCartStore();
@@ -60,6 +62,8 @@ export default function CatalogSelector() {
     () => sources?.cities.reduce((sum, city) => sum + city.locations.length, 0) ?? 0,
     [sources],
   );
+  const locationState = location.state as Partial<CatalogSelectorLocationState> | null;
+  const backTarget = locationState?.returnTo === '/products' ? '/products' : '/';
 
   const chooseSource = async (target: SelectedCatalog, key: string) => {
     if (target.status !== 'available') return;
@@ -119,7 +123,7 @@ export default function CatalogSelector() {
       <div className="copied-catalog-shell dark overflow-x-hidden">
         <main className="source-selector-main">
           <header className="source-selector-header">
-            <button className="back-btn" type="button" onClick={() => navigate('/')} aria-label={t('common.back')}>
+            <button className="back-btn" type="button" onClick={() => navigate(backTarget)} aria-label={t('common.back')}>
               <Icon name="chevronLeft" />
             </button>
             <div>

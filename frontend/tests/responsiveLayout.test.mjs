@@ -79,7 +79,7 @@ test('catalog selector uses one-open-city accordion instead of nested city route
 test('selected catalog does not show old location-selection back arrow', () => {
   assert.doesNotMatch(productsSource, /const backTarget = returnCityId/);
   assert.doesNotMatch(productsSource, /onClick=\{\(\) => navigate\(backTarget\)\}/);
-  assert.match(productsSource, /navigate\('\/catalog-selector'\)/);
+  assert.match(productsSource, /navigate\('\/catalog-selector', \{ state: \{ returnTo: '\/products' \} \}\)/);
 });
 
 test('app scrolls to the top on route changes', () => {
