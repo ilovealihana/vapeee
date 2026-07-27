@@ -240,6 +240,9 @@ test('admin location form uses Google Places autocomplete for address suggestion
   assert.match(citiesSource, /prediction\?\.mainText\?\.text/);
   assert.match(citiesSource, /prediction\?\.text\?\.toString\?\.\(\)/);
   assert.match(citiesSource, /const \[addressSuggestions,\s*setAddressSuggestions\] = useState<GoogleAddressSuggestion\[\]>\(\[\]\)/);
+  assert.match(citiesSource, /const \[addressDebug,\s*setAddressDebug\] = useState\(''\)/);
+  assert.match(citiesSource, /placesErrorMessage/);
+  assert.match(citiesSource, /t\('admin\.cities\.addressDebug'\)\.replace\('\{reason\}', addressDebug\)/);
   assert.match(citiesSource, /chooseAddressSuggestion/);
   assert.match(citiesSource, /className="admin-address-suggestions"/);
   assert.match(citiesSource, /formattedAddress/);

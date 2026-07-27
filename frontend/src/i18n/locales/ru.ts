@@ -384,6 +384,7 @@ const ru = {
         manual: 'Выберите адрес из подсказки Google, чтобы точка точно попала на карту.',
         unavailable: 'Подсказки Google сейчас недоступны. Адрес проверит сервер при сохранении.',
       },
+      addressDebug: 'Причина: {reason}',
       managerAssigned: 'Менеджер: ID {id}',
       managerMissing: 'Нет менеджера',
     },

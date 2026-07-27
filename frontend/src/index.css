@@ -1691,6 +1691,14 @@ textarea.input {
   color: #d6b27a;
 }
 
+.admin-address-debug {
+  margin: 4px 0 0;
+  color: rgba(214, 178, 122, 0.78);
+  font-size: 11px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
 .admin-address-suggestions {
   position: absolute;
   z-index: 10001;

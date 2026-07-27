@@ -144,6 +144,22 @@ function addressSuggestionLabel(suggestion: GoogleAddressSuggestion): string {
   return [main, secondary].filter(Boolean).join(', ');
 }
 
+function placesErrorMessage(error: unknown): string {
+  let message = 'unknown';
+  if (error instanceof Error) {
+    message = error.message;
+  } else if (typeof error === 'string') {
+    message = error;
+  } else {
+    try {
+      message = JSON.stringify(error) || 'unknown';
+    } catch {
+      message = 'unknown';
+    }
+  }
+  return (message || 'unknown').slice(0, 140);
+}
+
 export default function AdminCities() {
   const activeLocale = useUserStore((state) => state.activeLocale);
   const { t } = useI18n(activeLocale);
@@ -162,6 +178,7 @@ export default function AdminCities() {
   const [addressStatus, setAddressStatus] = useState<'idle' | 'selected' | 'manual' | 'unavailable'>('idle');
   const [placesReady, setPlacesReady] = useState(false);
   const [addressSuggestions, setAddressSuggestions] = useState<GoogleAddressSuggestion[]>([]);
+  const [addressDebug, setAddressDebug] = useState('');
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
   const locAddressInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -203,6 +220,7 @@ export default function AdminCities() {
         const Autocomplete = places?.Autocomplete;
         if (!Autocomplete) {
           setAddressStatus('unavailable');
+          setAddressDebug('AutocompleteSuggestion unavailable');
           return;
         }
         const autocomplete = new Autocomplete(input, {
@@ -214,10 +232,14 @@ export default function AdminCities() {
           const address = place.formatted_address || place.name || input.value;
           setLocForm(f => ({ ...f, address }));
           setAddressStatus('selected');
+          setAddressDebug('');
         });
       })
-      .catch(() => {
-        if (!cancelled) setAddressStatus('unavailable');
+      .catch((error) => {
+        if (!cancelled) {
+          setAddressStatus('unavailable');
+          setAddressDebug(placesErrorMessage(error));
+        }
       });
 
     return () => {
@@ -241,6 +263,7 @@ export default function AdminCities() {
     const fetchAutocompleteSuggestions = adminGoogleWindow()?.google?.maps?.places?.AutocompleteSuggestion?.fetchAutocompleteSuggestions;
     if (!fetchAutocompleteSuggestions) {
       setAddressSuggestions([]);
+      setAddressDebug('fetchAutocompleteSuggestions unavailable');
       return undefined;
     }
 
@@ -248,12 +271,16 @@ export default function AdminCities() {
     const timer = window.setTimeout(() => {
       fetchAutocompleteSuggestions({ input, includedRegionCodes: ['pl'] })
         .then((result) => {
-          if (!cancelled) setAddressSuggestions(normalizeGoogleSuggestions(result).slice(0, 5));
+          if (!cancelled) {
+            setAddressSuggestions(normalizeGoogleSuggestions(result).slice(0, 5));
+            setAddressDebug('');
+          }
         })
-        .catch(() => {
+        .catch((error) => {
           if (!cancelled) {
             setAddressSuggestions([]);
             setAddressStatus('unavailable');
+            setAddressDebug(placesErrorMessage(error));
           }
         });
     }, 180);
@@ -311,6 +338,7 @@ export default function AdminCities() {
       setLocForm(emptyLocation);
       setAddressStatus('idle');
       setAddressSuggestions([]);
+      setAddressDebug('');
       await loadLocations(locCityId);
     } catch (e: any) {
       setError(e.message);
@@ -328,12 +356,14 @@ export default function AdminCities() {
       setLocForm(f => ({ ...f, address }));
       setAddressStatus('selected');
       setAddressSuggestions([]);
+      setAddressDebug('');
     } catch {
       if (fallbackAddress) {
         setLocForm(f => ({ ...f, address: fallbackAddress }));
         setAddressStatus('manual');
       }
       setAddressSuggestions([]);
+      setAddressDebug('');
     }
   };
 
@@ -362,6 +392,7 @@ export default function AdminCities() {
     } : emptyLocation);
     setAddressStatus(loc?.address ? 'selected' : 'idle');
     setAddressSuggestions([]);
+    setAddressDebug('');
     setShowLocModal(true);
   };
 
@@ -501,10 +532,14 @@ export default function AdminCities() {
                 const address = e.target.value;
                 setLocForm(f => ({ ...f, address }));
                 setAddressStatus(address.trim() ? 'manual' : 'idle');
+                setAddressDebug('');
               }}
               placeholder={t('admin.cities.addressPlaceholder')}
             />
             <p className={`admin-address-helper is-${addressStatus}`}>{t(`admin.cities.addressHints.${addressStatus}`)}</p>
+            {addressStatus === 'unavailable' && addressDebug && (
+              <p className="admin-address-debug">{t('admin.cities.addressDebug').replace('{reason}', addressDebug)}</p>
+            )}
             {addressSuggestions.length > 0 && (
               <div className="admin-address-suggestions">
                 {addressSuggestions.map((suggestion, index) => (
