@@ -230,6 +230,7 @@ test('admin location form uses Google Places autocomplete for address suggestion
   assert.match(citiesSource, /VITE_GOOGLE_MAPS_API_KEY/);
   assert.match(citiesSource, /libraries=places/);
   assert.doesNotMatch(citiesSource, /loading=async/);
+  assert.match(citiesSource, /if \(existing && win\.google\?\.maps\) return Promise\.resolve\(\)/);
   assert.doesNotMatch(citiesSource, /AutocompleteSuggestion \|\| win\.google\?\.maps\?\.places\?\.Autocomplete\) return Promise\.resolve/);
   assert.match(citiesSource, /if \(!win\?\.google\?\.maps\?\.places\?\.AutocompleteSuggestion && win\?\.google\?\.maps\?\.importLibrary\)/);
   assert.match(citiesSource, /AutocompleteSuggestion/);

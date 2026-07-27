@@ -102,6 +102,7 @@ function ensureGooglePlacesScript(): Promise<void> {
   if (!key) return Promise.reject(new Error('google maps key unavailable'));
 
   const existing = document.querySelector<HTMLScriptElement>('script[data-google-maps-selector="true"]');
+  if (existing && win.google?.maps) return Promise.resolve();
   if (existing) {
     return new Promise((resolve, reject) => {
       existing.addEventListener('load', () => resolve(), { once: true });
