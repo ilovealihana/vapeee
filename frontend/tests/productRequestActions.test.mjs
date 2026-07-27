@@ -33,6 +33,7 @@ async function importProductRequestActionsModule() {
 function request(overrides = {}) {
   return {
     id: 1,
+    source_type: 'local_point',
     request_type: 'ADD_VARIANT',
     status: 'pending_review',
     requester_tg_id: 200,
@@ -167,6 +168,47 @@ test('product request action rules match roles, statuses and locks', async () =>
         },
       );
     }
+  } finally {
+    await cleanup();
+  }
+});
+
+test('product request action rules respect request source', async () => {
+  const { module, cleanup } = await importProductRequestActionsModule();
+  const { getProductRequestActions } = module;
+
+  try {
+    assert.deepEqual(
+      getProductRequestActions({
+        role: 'city_curator',
+        currentTgId: 300,
+        request: request({ source_type: 'inpost' }),
+        isOwnEditableRequest: false,
+      }),
+      {
+        canLock: false,
+        canTakeover: false,
+        canApprove: false,
+        canReject: false,
+        canRequestChanges: false,
+        canRelease: false,
+        canEdit: false,
+      },
+    );
+
+    assert.equal(getProductRequestActions({
+      role: 'project_admin',
+      currentTgId: 400,
+      request: request({ source_type: 'inpost' }),
+      isOwnEditableRequest: true,
+    }).canLock, true);
+
+    assert.equal(getProductRequestActions({
+      role: 'inpost_curator',
+      currentTgId: 500,
+      request: request({ source_type: 'inpost', status: 'need_changes' }),
+      isOwnEditableRequest: true,
+    }).canEdit, true);
   } finally {
     await cleanup();
   }

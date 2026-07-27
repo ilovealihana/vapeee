@@ -21,8 +21,9 @@ export function getProductRequestActions({
   request: AdminProductRequest;
   isOwnEditableRequest: boolean;
 }): ProductRequestActionState {
-  const isReviewer = role === 'project_admin' || role === 'city_curator';
   const isProjectAdmin = role === 'project_admin';
+  const isInpost = request.source_type === 'inpost';
+  const canReviewSource = isProjectAdmin || (!isInpost && role === 'city_curator');
   const isPending = request.status === 'pending_review';
   const isNeedChanges = request.status === 'need_changes';
   const isFinal = request.status === 'approved' || request.status === 'rejected';
@@ -44,11 +45,11 @@ export function getProductRequestActions({
   }
 
   return {
-    canLock: isReviewer && isPending && !hasLock,
+    canLock: canReviewSource && isPending && !hasLock,
     canTakeover: isProjectAdmin && isPending && lockedByAnother,
-    canApprove: isReviewer && isPending && ownsLock,
-    canReject: isReviewer && isPending && ownsLock,
-    canRequestChanges: isReviewer && isPending && ownsLock,
+    canApprove: canReviewSource && isPending && ownsLock,
+    canReject: canReviewSource && isPending && ownsLock,
+    canRequestChanges: canReviewSource && isPending && ownsLock,
     canRelease: isPending && (ownsLock || (isProjectAdmin && hasLock)),
     canEdit: isNeedChanges && isOwnEditableRequest && !hasLock,
   };
