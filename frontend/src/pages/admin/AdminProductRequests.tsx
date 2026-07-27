@@ -5,6 +5,7 @@ import {
   type AdminStaffRole,
   type ProductRequestOptions,
   type ProductRequestPayload,
+  type ProductRequestSourceType,
   type ProductRequestStatus,
   type ProductRequestType,
   type ProductRequestUpdatePayload,
@@ -16,6 +17,7 @@ import { AdminEmptyState, AdminModal, AdminPageHeader, AdminStatusBadge } from '
 import { getProductRequestActions } from './productRequestActions';
 
 type FormState = {
+  source_type: ProductRequestSourceType;
   request_type: ProductRequestType;
   location_id: string;
   product_id: string;
@@ -36,8 +38,10 @@ type EditFormState = {
 type RequestMode = 'active' | 'archive';
 type ActiveFilter = 'all' | 'pending_review' | 'need_changes';
 type ArchiveFilter = 'all' | 'approved' | 'rejected';
+type SourceFilter = 'all' | 'local_point' | 'inpost';
 
 const initialForm: FormState = {
+  source_type: 'local_point',
   request_type: 'ADD_VARIANT',
   location_id: '',
   product_id: '',
@@ -64,10 +68,11 @@ export default function AdminProductRequests() {
   const { t } = useI18n(activeLocale);
   const [adminRole, setAdminRole] = useState<AdminStaffRole | undefined>();
   const [requests, setRequests] = useState<AdminProductRequest[]>([]);
-  const [options, setOptions] = useState<ProductRequestOptions>({ locations: [], products: [] });
+  const [options, setOptions] = useState<ProductRequestOptions>({ sources: [], locations: [], products: [] });
   const [form, setForm] = useState<FormState>(initialForm);
   const [creating, setCreating] = useState(false);
   const [mode, setMode] = useState<RequestMode>('active');
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
   const [activeFilter, setActiveFilter] = useState<ActiveFilter>('all');
   const [archiveFilter, setArchiveFilter] = useState<ArchiveFilter>('all');
   const [loading, setLoading] = useState(true);
@@ -94,24 +99,32 @@ export default function AdminProductRequests() {
     try {
       const [access, nextRequests, nextOptions] = await Promise.all([
         adminApi.getAccess(),
-        adminApi.getProductRequests({ mode, status: selectedStatus }),
+        adminApi.getProductRequests({ mode, status: selectedStatus, source: sourceFilter }),
         adminApi.getProductRequestOptions(),
       ]);
       setAdminRole(access.role);
       setRequests(nextRequests);
       setOptions(nextOptions);
-      setForm((current) => ({
-        ...current,
-        location_id: current.location_id || String(nextOptions.locations[0]?.id ?? ''),
-        product_id: current.product_id || String(nextOptions.products[0]?.id ?? ''),
-      }));
+      setForm((current) => {
+        const nextSource = nextOptions.sources.some((source) => source.source_type === current.source_type)
+          ? current.source_type
+          : (nextOptions.sources[0]?.source_type ?? 'local_point');
+        return {
+          ...current,
+          source_type: nextSource,
+          location_id: nextSource === 'inpost'
+            ? ''
+            : (current.location_id || String(nextOptions.locations[0]?.id ?? '')),
+          product_id: current.product_id || String(nextOptions.products[0]?.id ?? ''),
+        };
+      });
     } catch (e: any) {
       setError(e.message);
     }
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, [mode, selectedStatus]);
+  useEffect(() => { load(); }, [mode, selectedStatus, sourceFilter]);
 
   const selectedProduct = useMemo(
     () => options.products.find((product) => product.id === Number(form.product_id)),
@@ -128,12 +141,19 @@ export default function AdminProductRequests() {
 
   const requestTypeLabel = (type: ProductRequestType) => t(`admin.productRequests.types.${type}`);
   const statusLabel = (status: string) => t(`admin.productRequests.status.${status}`);
-  const canCreate = adminRole === 'point_manager';
+  const sourceLabel = (sourceType: ProductRequestSourceType) => t(`admin.productRequests.sourceLabels.${sourceType === 'inpost' ? 'inpost' : 'localPoint'}`);
+  const targetLabel = (request: AdminProductRequest) => request.source_type === 'inpost'
+    ? t('admin.productRequests.sourceLabels.inpost')
+    : `${request.city_name || t('admin.productRequests.cityFallback')} - ${request.location_name || t('admin.productRequests.locationFallback')}`;
+  const canCreate = options.sources.length > 0;
   const canReview = adminRole === 'project_admin' || adminRole === 'city_curator';
-  const reviewingOwnEditable = Boolean(reviewing) && (
+  const isEditableRequest = (request: AdminProductRequest) => (
     adminRole === 'project_admin'
-    || adminRole === 'city_curator'
-    || reviewing?.requester_tg_id === currentTgId
+    || (request.source_type === 'inpost' && adminRole === 'inpost_curator')
+    || (request.source_type !== 'inpost' && (adminRole === 'city_curator' || request.requester_tg_id === currentTgId))
+  );
+  const reviewingOwnEditable = Boolean(reviewing) && (
+    reviewing ? isEditableRequest(reviewing) : false
   );
   const reviewActions = reviewing
     ? getProductRequestActions({ role: adminRole, currentTgId, request: reviewing, isOwnEditableRequest: reviewingOwnEditable })
@@ -151,6 +171,8 @@ export default function AdminProductRequests() {
     setForm((current) => ({
       ...current,
       [key]: value,
+      ...(key === 'source_type' && value === 'inpost' ? { location_id: '' } : {}),
+      ...(key === 'source_type' && value === 'local_point' ? { location_id: current.location_id || String(options.locations[0]?.id ?? '') } : {}),
       ...(key === 'product_id' ? { variant_id: '' } : {}),
     }));
   };
@@ -222,8 +244,9 @@ export default function AdminProductRequests() {
     setError('');
     setSuccess('');
     const payload: ProductRequestPayload = {
+      source_type: form.source_type,
       request_type: form.request_type,
-      location_id: Number(form.location_id),
+      location_id: form.source_type === 'inpost' ? null : Number(form.location_id),
       product_id: Number(form.product_id),
       quantity: Math.max(1, Number(form.quantity) || 1),
     };
@@ -238,7 +261,12 @@ export default function AdminProductRequests() {
 
     try {
       await adminApi.createProductRequest(payload);
-      setForm((current) => ({ ...initialForm, location_id: current.location_id, product_id: current.product_id }));
+      setForm((current) => ({
+        ...initialForm,
+        source_type: current.source_type,
+        location_id: current.source_type === 'inpost' ? '' : current.location_id,
+        product_id: current.product_id,
+      }));
       setCreating(false);
       setSuccess(t('admin.productRequests.created'));
       await load();
@@ -314,7 +342,7 @@ export default function AdminProductRequests() {
     setEditForm(null);
   };
 
-  const canSubmit = form.location_id && form.product_id && form.quantity && (
+  const canSubmit = (form.source_type === 'inpost' || form.location_id) && form.product_id && form.quantity && (
     form.request_type === 'ADD_VARIANT' ? form.variant_name.trim() : form.variant_id
   );
 
@@ -327,6 +355,11 @@ export default function AdminProductRequests() {
     { value: 'all', label: t('admin.productRequests.filters.allArchive') },
     { value: 'approved', label: t('admin.productRequests.filters.approved') },
     { value: 'rejected', label: t('admin.productRequests.filters.rejected') },
+  ];
+  const sourceFilters: { value: SourceFilter; label: string }[] = [
+    { value: 'all', label: t('admin.productRequests.sourceFilters.all') },
+    { value: 'inpost', label: t('admin.productRequests.sourceFilters.inpost') },
+    { value: 'local_point', label: t('admin.productRequests.sourceFilters.localPoint') },
   ];
 
   return (
@@ -362,6 +395,21 @@ export default function AdminProductRequests() {
         ))}
       </div>
 
+      <div className="admin-product-request-filter-divider" aria-hidden="true" />
+
+      <div className="admin-filter-bar">
+        {sourceFilters.map((filter) => (
+          <button
+            key={filter.value}
+            className={`admin-button ${sourceFilter === filter.value ? 'admin-button-primary' : 'admin-button-secondary'}`}
+            type="button"
+            onClick={() => setSourceFilter(filter.value)}
+          >
+            {filter.label}
+          </button>
+        ))}
+      </div>
+
       {canCreate && (
         <div className="admin-page-actions admin-product-request-create-actions">
           <button className="admin-button admin-button-primary" type="button" onClick={openCreateModal}>
@@ -377,18 +425,17 @@ export default function AdminProductRequests() {
       {!loading && requests.length > 0 && (
         <div className="admin-cms-table">
           {requests.map((request) => {
-            const isOwnEditableRequest = adminRole === 'project_admin'
-              || adminRole === 'city_curator'
-              || request.requester_tg_id === currentTgId;
+            const isOwnEditableRequest = isEditableRequest(request);
             const actions = getProductRequestActions({ role: adminRole, currentTgId, request, isOwnEditableRequest });
             const isBusy = (action: string) => pendingActionId === `${request.id}:${action}`;
             return (
               <div key={request.id} className="admin-cms-row admin-request-row">
                 <span className="admin-cms-cell-main">
                   <strong>{request.product_name || t('admin.productRequests.productFallback')}</strong>
-                  <span>{requestTypeLabel(request.request_type)} - {request.location_name || t('admin.productRequests.locationFallback')}</span>
+                  <span>{sourceLabel(request.source_type)} - {targetLabel(request)}</span>
                 </span>
                 <div className="admin-request-meta">
+                  <span>{requestTypeLabel(request.request_type)}</span>
                   <span>{request.variant_name || request.variant_name_ru || t('admin.productRequests.variantFallback')}</span>
                   <span>{t('admin.productRequests.quantity').replace('{count}', String(request.quantity))}</span>
                   {request.review_comment && <span>{t('admin.productRequests.fields.latestComment')}: {request.review_comment}</span>}
@@ -436,20 +483,30 @@ export default function AdminProductRequests() {
         >
           <div className="admin-form-grid">
             <div className="input-group">
+              <label className="input-label">{t('admin.productRequests.fields.source')}</label>
+              <select className="input" value={form.source_type} onChange={event => setField('source_type', event.target.value as ProductRequestSourceType)}>
+                {options.sources.map((source) => (
+                  <option key={source.source_type} value={source.source_type}>{sourceLabel(source.source_type)}</option>
+                ))}
+              </select>
+            </div>
+            <div className="input-group">
               <label className="input-label">{t('admin.productRequests.fields.type')}</label>
               <select className="input" value={form.request_type} onChange={event => setField('request_type', event.target.value as ProductRequestType)}>
                 <option value="ADD_VARIANT">{requestTypeLabel('ADD_VARIANT')}</option>
                 <option value="ADD_STOCK">{requestTypeLabel('ADD_STOCK')}</option>
               </select>
             </div>
-            <div className="input-group">
-              <label className="input-label">{t('admin.productRequests.fields.location')}</label>
-              <select className="input" value={form.location_id} onChange={event => setField('location_id', event.target.value)}>
-                {options.locations.map((location) => (
-                  <option key={location.id} value={location.id}>{location.city_name} - {location.name}</option>
-                ))}
-              </select>
-            </div>
+            {form.source_type === 'local_point' && (
+              <div className="input-group">
+                <label className="input-label">{t('admin.productRequests.fields.location')}</label>
+                <select className="input" value={form.location_id} onChange={event => setField('location_id', event.target.value)}>
+                  {options.locations.map((location) => (
+                    <option key={location.id} value={location.id}>{location.city_name} - {location.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div className="input-group">
               <label className="input-label">{t('admin.productRequests.fields.product')}</label>
               <select className="input" value={form.product_id} onChange={event => setField('product_id', event.target.value)}>
@@ -517,7 +574,8 @@ export default function AdminProductRequests() {
         >
           {reviewCloseError && <p className="admin-message admin-message-error">{reviewCloseError}</p>}
           <div className="admin-request-review-details">
-            <p><strong>{t('admin.productRequests.fields.location')}</strong><span>{reviewing.location_name || t('admin.productRequests.locationFallback')}</span></p>
+            <p><strong>{t('admin.productRequests.fields.source')}</strong><span>{sourceLabel(reviewing.source_type)}</span></p>
+            <p><strong>{t('admin.productRequests.fields.location')}</strong><span>{targetLabel(reviewing)}</span></p>
             <p><strong>{t('admin.productRequests.fields.type')}</strong><span>{requestTypeLabel(reviewing.request_type)}</span></p>
             <p><strong>{t('admin.productRequests.fields.variant')}</strong><span>{reviewing.variant_name || reviewing.variant_name_ru || t('admin.productRequests.variantFallback')}</span></p>
             <p><strong>{t('admin.productRequests.fields.quantity')}</strong><span>{String(reviewing.quantity)}</span></p>

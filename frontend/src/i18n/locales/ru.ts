@@ -488,6 +488,7 @@ const ru = {
       emptyTitle: 'Заявок нет',
       emptyDescription: 'Создайте заявку на новый вариант или пополнение остатков.',
       productFallback: 'Товар',
+      cityFallback: 'Город не указан',
       locationFallback: 'Точка',
       variantFallback: 'Новый вариант',
       quantity: '+{count} шт.',
@@ -516,6 +517,15 @@ const ru = {
         approved: 'Подтвержденные',
         rejected: 'Отклоненные',
       },
+      sourceFilters: {
+        all: 'Все источники',
+        inpost: 'InPost',
+        localPoint: 'Локальные точки',
+      },
+      sourceLabels: {
+        inpost: 'InPost',
+        localPoint: 'Локальная точка',
+      },
       actions: {
         needChanges: 'Запросить изменения',
         takeReview: 'Взять в проверку',
@@ -535,6 +545,7 @@ const ru = {
         rejected: 'Отклонена',
       },
       fields: {
+        source: 'Источник',
         type: 'Тип заявки',
         location: 'Точка',
         product: 'Товар',
@@ -688,7 +699,7 @@ const ru = {
       quantity_invalid: 'Количество не соответствует правилам заявки.',
       resubmit_not_allowed: 'Заявку нельзя отправить повторно из текущего статуса.',
       review_permission_denied: 'Нет прав для проверки заявок на товары.',
-      source_invalid: 'Источник заявки должен быть LOCAL или INPOST.',
+      source_invalid: 'Источник заявки должен быть Local Point или InPost.',
       status_invalid: 'Неверный статус заявки.',
       transition_invalid: 'Запрошенный переход статуса недоступен.',
       type_invalid: 'Тип заявки не поддерживается.',

@@ -108,16 +108,19 @@ export interface AdminAccess {
 
 export type ProductRequestType = 'ADD_VARIANT' | 'ADD_STOCK';
 export type ProductRequestStatus = 'pending_review' | 'need_changes' | 'approved' | 'rejected';
+export type ProductRequestSourceType = 'local_point' | 'inpost';
+export type ProductRequestSourceFilter = 'all' | ProductRequestSourceType;
 
 export interface AdminProductRequest {
   id: number;
+  source_type: ProductRequestSourceType;
   request_type: ProductRequestType;
   status: ProductRequestStatus;
   requester_user_id?: number;
   requester_tg_id: number;
-  city_id: number;
+  city_id?: number | null;
   city_name?: string;
-  location_id: number;
+  location_id?: number | null;
   location_name?: string;
   product_id: number;
   product_name?: string;
@@ -146,14 +149,22 @@ export interface ProductRequestLocationOption {
   name: string;
 }
 
+export interface ProductRequestSourceOption {
+  source_type: ProductRequestSourceType;
+  label: string;
+  available: boolean;
+}
+
 export interface ProductRequestOptions {
+  sources: ProductRequestSourceOption[];
   locations: ProductRequestLocationOption[];
   products: AdminProduct[];
 }
 
 export interface ProductRequestPayload {
+  source_type: ProductRequestSourceType;
   request_type: ProductRequestType;
-  location_id: number;
+  location_id?: number | null;
   product_id: number;
   variant_id?: number;
   variant_name_ru?: string;
@@ -238,10 +249,11 @@ export const adminApi = {
     req<void>(`/api/admin/staff/${id}/hard-delete`, { method: 'DELETE' }),
 
   // Product requests
-  getProductRequests: (params?: { mode?: 'active' | 'archive'; status?: ProductRequestStatus }) => {
+  getProductRequests: (params?: { mode?: 'active' | 'archive'; status?: ProductRequestStatus; source?: ProductRequestSourceFilter }) => {
     const q = new URLSearchParams();
     if (params?.mode) q.set('mode', params.mode);
     if (params?.status) q.set('status', params.status);
+    if (params?.source && params.source !== 'all') q.set('source', params.source);
     const query = q.toString();
     return req<AdminProductRequest[]>(`/api/admin/product-requests${query ? `?${query}` : ''}`);
   },

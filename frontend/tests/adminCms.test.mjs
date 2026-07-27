@@ -54,7 +54,11 @@ test('admin product requests page is routed and uses cms/i18n patterns', () => {
   assert.match(appSource, /import AdminProductRequests from '\.\/pages\/admin\/AdminProductRequests'/);
   assert.match(appSource, /path="product-requests" element=\{<AdminProductRequests \/>\}/);
   assert.match(adminApiSource, /export type ProductRequestType = 'ADD_VARIANT' \| 'ADD_STOCK'/);
-  assert.match(adminApiSource, /getProductRequests: \(params\?: \{ mode\?: 'active' \| 'archive'; status\?: ProductRequestStatus \}\)/);
+  assert.match(adminApiSource, /export type ProductRequestSourceType = 'local_point' \| 'inpost'/);
+  assert.match(adminApiSource, /export type ProductRequestSourceFilter = 'all' \| ProductRequestSourceType/);
+  assert.match(adminApiSource, /source_type: ProductRequestSourceType/);
+  assert.match(adminApiSource, /source\?: ProductRequestSourceFilter/);
+  assert.match(adminApiSource, /getProductRequests: \(params\?: \{ mode\?: 'active' \| 'archive'; status\?: ProductRequestStatus; source\?: ProductRequestSourceFilter \}\)/);
   assert.match(adminApiSource, /createProductRequest:/);
   assert.match(adminApiSource, /approveProductRequest:/);
   assert.match(adminApiSource, /rejectProductRequest:/);
@@ -68,7 +72,12 @@ test('admin product requests page is routed and uses cms/i18n patterns', () => {
   assert.match(productRequestsSource, /adminApi\.rejectProductRequest/);
   assert.match(productRequestsSource, /rejectReason\.trim\(\)/);
   assert.match(productRequestsSource, /adminApi\.getAccess/);
-  assert.match(productRequestsSource, /const canCreate = adminRole === 'point_manager'/);
+  assert.match(productRequestsSource, /type SourceFilter = 'all' \| 'local_point' \| 'inpost'/);
+  assert.match(productRequestsSource, /adminApi\.getProductRequests\(\{ mode, status: selectedStatus, source: sourceFilter \}\)/);
+  assert.match(productRequestsSource, /admin\.productRequests\.sourceFilters\.inpost/);
+  assert.match(productRequestsSource, /admin\.productRequests\.sourceLabels\.inpost/);
+  assert.match(productRequestsSource, /form\.source_type === 'inpost'/);
+  assert.match(productRequestsSource, /const canCreate = options\.sources\.length > 0/);
   assert.match(productRequestsSource, /const canReview = adminRole === 'project_admin' \|\| adminRole === 'city_curator'/);
   assert.match(productRequestsSource, /\{canCreate && \(/);
   assert.match(productRequestsSource, /getProductRequestActions\(\{ role: adminRole, currentTgId, request, isOwnEditableRequest \}\)/);
@@ -123,9 +132,10 @@ test('admin product request review loop frontend contract is exposed', () => {
   assert.match(adminApiSource, /variant_name_uk\?: string/);
   assert.match(adminApiSource, /price_override\?: string \| null/);
   assert.match(adminApiSource, /quantity\?: number/);
-  assert.match(adminApiSource, /getProductRequests: \(params\?: \{ mode\?: 'active' \| 'archive'; status\?: ProductRequestStatus \}\)/);
+  assert.match(adminApiSource, /getProductRequests: \(params\?: \{ mode\?: 'active' \| 'archive'; status\?: ProductRequestStatus; source\?: ProductRequestSourceFilter \}\)/);
   assert.match(adminApiSource, /if \(params\?\.mode\) q\.set\('mode', params\.mode\)/);
   assert.match(adminApiSource, /if \(params\?\.status\) q\.set\('status', params\.status\)/);
+  assert.match(adminApiSource, /if \(params\?\.source && params\.source !== 'all'\) q\.set\('source', params\.source\)/);
   assert.match(adminApiSource, /`\/api\/admin\/product-requests\$\{query \? `\?\$\{query\}` : ''\}`/);
   assert.match(adminApiSource, /lockProductRequest: \(id: number\) =>\s*req<AdminProductRequest>\(`\/api\/admin\/product-requests\/\$\{id\}\/lock`, \{ method: 'POST' \}\)/);
   assert.match(adminApiSource, /releaseProductRequest: \(id: number\) =>\s*req<AdminProductRequest>\(`\/api\/admin\/product-requests\/\$\{id\}\/release`, \{ method: 'POST' \}\)/);
@@ -160,7 +170,7 @@ test('admin product request review loop frontend contract is exposed', () => {
 
 test('admin product requests page wires review loop controls', () => {
   assert.match(productRequestsSource, /import \{ getProductRequestActions \} from '\.\/productRequestActions'/);
-  assert.match(productRequestsSource, /adminApi\.getProductRequests\(\{ mode, status: selectedStatus \}\)/);
+  assert.match(productRequestsSource, /adminApi\.getProductRequests\(\{ mode, status: selectedStatus, source: sourceFilter \}\)/);
   assert.match(productRequestsSource, /adminApi\.lockProductRequest/);
   assert.match(productRequestsSource, /adminApi\.releaseProductRequest/);
   assert.match(productRequestsSource, /adminApi\.needChangesProductRequest/);
