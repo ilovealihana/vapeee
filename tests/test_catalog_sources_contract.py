@@ -11,7 +11,7 @@ from db.models.location import Location
 from db.models.location_stock import LocationStock
 from db.models.product import Product
 from db.models.product_variant import ProductVariant
-from db.models.staff import ROLE_POINT_MANAGER, StaffAssignment, StaffMember
+from db.models.staff import ROLE_INPOST_CURATOR, ROLE_POINT_MANAGER, StaffAssignment, StaffMember
 from db.session import Base
 from webapp.errors import ApiError, ErrorCode
 from webapp.routes import catalog as catalog_routes
@@ -138,6 +138,26 @@ class CatalogSourcesContractTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(locations["Center"].manager_tg_username, "manager1001")
         self.assertEqual(locations["North"].status, "coming_soon")
         self.assertFalse(locations["North"].catalog_available)
+
+    async def test_inpost_source_available_when_active_inpost_curator_exists(self):
+        async with self.session_maker() as session:
+            await self._seed_catalog(session)
+            session.add(StaffMember(tg_id=2001, role=ROLE_INPOST_CURATOR, is_active=True))
+            await session.commit()
+
+            response = await catalog_routes.get_catalog_sources(session=session)
+
+        self.assertEqual(response.inpost.status, "available")
+
+    async def test_inpost_source_inactive_without_active_inpost_curator(self):
+        async with self.session_maker() as session:
+            await self._seed_catalog(session)
+            session.add(StaffMember(tg_id=2002, role=ROLE_INPOST_CURATOR, is_active=False))
+            await session.commit()
+
+            response = await catalog_routes.get_catalog_sources(session=session)
+
+        self.assertEqual(response.inpost.status, "inactive")
 
     async def test_local_point_products_keep_location_stock_filter(self):
         async with self.session_maker() as session:

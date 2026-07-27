@@ -11,7 +11,7 @@ from db.models.location import Location
 from db.models.location_stock import LocationStock
 from db.models.product import Product
 from db.models.product_variant import ProductVariant
-from db.models.staff import ROLE_POINT_MANAGER, StaffAssignment, StaffMember
+from db.models.staff import ROLE_INPOST_CURATOR, ROLE_POINT_MANAGER, StaffAssignment, StaffMember
 
 
 class CatalogRepository:
@@ -76,6 +76,17 @@ class CatalogRepository:
             .order_by(StaffMember.id)
         )
         return result.scalar_one_or_none()
+
+    async def has_active_inpost_curator(self) -> bool:
+        result = await self.session.execute(
+            select(StaffMember.id)
+            .where(
+                StaffMember.role == ROLE_INPOST_CURATOR,
+                StaffMember.is_active == True,
+            )
+            .limit(1)
+        )
+        return result.scalar_one_or_none() is not None
 
     async def create_location(
         self,

@@ -112,6 +112,7 @@ async def get_cities(session: AsyncSession = Depends(get_session)):
 async def get_catalog_sources(session: AsyncSession = Depends(get_session)):
     repo = CatalogRepository(session)
     inpost_summary = await repo.get_inpost_stock_summary()
+    inpost_available = await repo.has_active_inpost_curator()
     cities = []
     for city in await repo.get_catalog_source_cities():
         locations = []
@@ -135,7 +136,7 @@ async def get_catalog_sources(session: AsyncSession = Depends(get_session)):
         cities.append(CatalogSourceCitySchema(id=city.id, name=city.name, locations=locations))
     return CatalogSourcesSchema(
         inpost=CatalogSourceInpostSchema(
-            status="inactive",
+            status="available" if inpost_available else "inactive",
             stock_count=inpost_summary["total_qty"],
         ),
         cities=cities,
