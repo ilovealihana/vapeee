@@ -18,8 +18,8 @@ class ProductRequestEventContext:
     event_type: str
     actor_tg_id: int
     requester_tg_id: int
-    city_id: int
-    location_id: int
+    city_id: int | None
+    location_id: int | None
     current_status: str
     comment: str | None = None
 

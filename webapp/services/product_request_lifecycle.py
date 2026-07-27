@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from db.models.city import City
+from db.models.inpost_stock import InpostStock
 from db.models.location import Location
 from db.models.location_stock import LocationStock
 from db.models.product import Product
@@ -17,10 +18,12 @@ from db.models.product_request import (
     PRODUCT_REQUEST_NEED_CHANGES,
     PRODUCT_REQUEST_PENDING_REVIEW,
     PRODUCT_REQUEST_REJECTED,
+    PRODUCT_REQUEST_SOURCE_INPOST,
+    PRODUCT_REQUEST_SOURCE_LOCAL_POINT,
     ProductRequest,
 )
 from db.models.product_variant import ProductVariant
-from db.models.staff import ROLE_CITY_CURATOR, StaffMember
+from db.models.staff import ROLE_CITY_CURATOR, ROLE_INPOST_CURATOR, StaffMember
 from db.models.staff import ROLE_POINT_MANAGER
 from webapp.deps import is_project_admin_user
 from webapp.errors import ErrorCode, api_error
@@ -51,11 +54,17 @@ def _staff_location_ids(member: StaffMember | None) -> set[int]:
     return {assignment.location_id for assignment in member.assignments if assignment.location_id is not None}
 
 
-async def _ensure_reviewer_can_review(actor, session: AsyncSession, city_id: int) -> None:
+async def _ensure_reviewer_can_review_request(actor, session: AsyncSession, request: ProductRequest) -> None:
     if await is_project_admin_user(actor, session):
         return
+    if request.source_type == PRODUCT_REQUEST_SOURCE_INPOST:
+        raise api_error(
+            403,
+            ErrorCode.PRODUCT_REQUEST_REVIEW_PERMISSION_DENIED,
+            "InPost review requires project admin",
+        )
     member = await _active_staff_for_actor(actor, session)
-    if member and member.role == ROLE_CITY_CURATOR and city_id in _staff_city_ids(member):
+    if member and member.role == ROLE_CITY_CURATOR and request.city_id in _staff_city_ids(member):
         return
     raise api_error(403, ErrorCode.PRODUCT_REQUEST_REVIEW_PERMISSION_DENIED, "Review access denied")
 
@@ -64,6 +73,10 @@ async def _ensure_actor_can_edit_request(actor, session: AsyncSession, request: 
     if await is_project_admin_user(actor, session):
         return
     member = await _active_staff_for_actor(actor, session)
+    if request.source_type == PRODUCT_REQUEST_SOURCE_INPOST:
+        if member and member.role == ROLE_INPOST_CURATOR:
+            return
+        raise api_error(403, ErrorCode.PRODUCT_REQUEST_PERMISSION_DENIED, "InPost request edit access denied")
     if member and member.role == ROLE_CITY_CURATOR and request.city_id in _staff_city_ids(member):
         return
     if (
@@ -173,7 +186,7 @@ async def lock_product_request(request_id: int, *, actor, session: AsyncSession)
             ErrorCode.PRODUCT_REQUEST_LOCK_NOT_ALLOWED_FOR_STATUS,
             "Request cannot be locked in its current status",
         )
-    await _ensure_reviewer_can_review(actor, session, request.city_id)
+    await _ensure_reviewer_can_review_request(actor, session, request)
 
     actor_tg_id = actor.tg_id
     if request.locked_by_tg_id == actor_tg_id:
@@ -195,7 +208,7 @@ async def lock_product_request(request_id: int, *, actor, session: AsyncSession)
 
 async def release_product_request(request_id: int, *, actor, session: AsyncSession) -> ProductRequest:
     request = await _load_product_request_for_update(session, request_id)
-    await _ensure_reviewer_can_review(actor, session, request.city_id)
+    await _ensure_reviewer_can_review_request(actor, session, request)
 
     is_project_admin = await is_project_admin_user(actor, session)
     actor_tg_id = actor.tg_id
@@ -217,9 +230,47 @@ async def release_product_request(request_id: int, *, actor, session: AsyncSessi
 
 
 async def ensure_request_lock_owner(request: ProductRequest, *, actor, session: AsyncSession) -> None:
-    await _ensure_reviewer_can_review(actor, session, request.city_id)
+    await _ensure_reviewer_can_review_request(actor, session, request)
     if request.locked_by_tg_id != getattr(actor, "tg_id", None):
         raise api_error(409, ErrorCode.PRODUCT_REQUEST_LOCK_REQUIRED, "Product request lock is required")
+
+
+async def _upsert_inpost_stock(
+    session: AsyncSession,
+    variant_id: int,
+    quantity: int,
+    request_type: str,
+) -> None:
+    result = await session.execute(select(InpostStock).where(InpostStock.variant_id == variant_id))
+    stock = result.scalar_one_or_none()
+    if stock is None:
+        session.add(InpostStock(variant_id=variant_id, quantity=quantity))
+    elif request_type == PRODUCT_REQUEST_ADD_STOCK:
+        stock.quantity += quantity
+    else:
+        stock.quantity = quantity
+
+
+async def _upsert_location_stock(
+    session: AsyncSession,
+    location_id: int,
+    variant_id: int,
+    quantity: int,
+    request_type: str,
+) -> None:
+    result = await session.execute(
+        select(LocationStock).where(
+            LocationStock.location_id == location_id,
+            LocationStock.variant_id == variant_id,
+        )
+    )
+    stock = result.scalar_one_or_none()
+    if stock is None:
+        session.add(LocationStock(location_id=location_id, variant_id=variant_id, quantity=quantity))
+    elif request_type == PRODUCT_REQUEST_ADD_STOCK:
+        stock.quantity += quantity
+    else:
+        stock.quantity = quantity
 
 
 async def approve_product_request(request_id: int, *, actor, session: AsyncSession) -> ProductRequest:
@@ -227,7 +278,8 @@ async def approve_product_request(request_id: int, *, actor, session: AsyncSessi
     if request.status != PRODUCT_REQUEST_PENDING_REVIEW:
         raise api_error(409, ErrorCode.PRODUCT_REQUEST_TRANSITION_INVALID, "Request is not pending review")
     await ensure_request_lock_owner(request, actor=actor, session=session)
-    await _ensure_request_location(session, request.location_id)
+    if request.source_type == PRODUCT_REQUEST_SOURCE_LOCAL_POINT:
+        await _ensure_request_location(session, request.location_id)
     await _ensure_active_product(session, request.product_id)
 
     if request.request_type == PRODUCT_REQUEST_ADD_VARIANT:
@@ -249,20 +301,16 @@ async def approve_product_request(request_id: int, *, actor, session: AsyncSessi
     else:
         raise api_error(422, ErrorCode.PRODUCT_REQUEST_TYPE_INVALID, "Product request type is invalid")
 
-    result = await session.execute(
-        select(LocationStock).where(
-            LocationStock.location_id == request.location_id,
-            LocationStock.variant_id == stock_variant_id,
-        )
-    )
-    stock = result.scalar_one_or_none()
-    if stock is None:
-        stock = LocationStock(location_id=request.location_id, variant_id=stock_variant_id, quantity=request.quantity)
-        session.add(stock)
-    elif request.request_type == PRODUCT_REQUEST_ADD_STOCK:
-        stock.quantity += request.quantity
+    if request.source_type == PRODUCT_REQUEST_SOURCE_INPOST:
+        await _upsert_inpost_stock(session, stock_variant_id, request.quantity, request.request_type)
     else:
-        stock.quantity = request.quantity
+        await _upsert_location_stock(
+            session,
+            request.location_id,
+            stock_variant_id,
+            request.quantity,
+            request.request_type,
+        )
 
     request.status = PRODUCT_REQUEST_APPROVED
     request.reviewer_tg_id = actor.tg_id

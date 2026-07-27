@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 import db.models  # noqa: F401 - register model metadata
 from db.models.city import City
+from db.models.inpost_stock import InpostStock
 from db.models.location import Location
 from db.models.location_stock import LocationStock
 from db.models.product import Product
@@ -145,6 +146,16 @@ class ProductRequestsContractTest(unittest.IsolatedAsyncioTestCase):
             variant_name_pl="Warehouse Mint",
             variant_name_uk="Warehouse Mint",
             price_override=Decimal("22.00"),
+            quantity=quantity,
+        )
+
+    def _inpost_add_stock_body(self, product: Product, variant: ProductVariant, quantity=3) -> CreateProductRequestRequest:
+        return CreateProductRequestRequest(
+            source_type="inpost",
+            request_type="ADD_STOCK",
+            location_id=None,
+            product_id=product.id,
+            variant_id=variant.id,
             quantity=quantity,
         )
 
@@ -324,6 +335,47 @@ class ProductRequestsContractTest(unittest.IsolatedAsyncioTestCase):
 
             with self.assertRaises(ApiError) as raised:
                 await lock_product_request(request.id, actor=manager, session=session)
+
+        self.assertEqual(raised.exception.status_code, 403)
+        self.assertEqual(raised.exception.code, ErrorCode.PRODUCT_REQUEST_REVIEW_PERMISSION_DENIED)
+
+    async def test_city_curator_cannot_lock_inpost_request(self):
+        from webapp.services.product_request_lifecycle import lock_product_request
+
+        async with self.session_maker() as session:
+            city, _ = await self._city_location(session)
+            product = await self._product(session)
+            inpost_curator = await self._user(session, 15010, "InPost Curator")
+            city_curator = await self._user(session, 15011, "City Curator")
+            await self._inpost_curator(session, inpost_curator)
+            await self._city_curator(session, city_curator, city)
+            request = await admin_create_product_request(
+                self._inpost_add_variant_body(product),
+                actor=inpost_curator,
+                session=session,
+            )
+
+            with self.assertRaises(ApiError) as raised:
+                await lock_product_request(request.id, actor=city_curator, session=session)
+
+        self.assertEqual(raised.exception.status_code, 403)
+        self.assertEqual(raised.exception.code, ErrorCode.PRODUCT_REQUEST_REVIEW_PERMISSION_DENIED)
+
+    async def test_inpost_curator_cannot_lock_inpost_request(self):
+        from webapp.services.product_request_lifecycle import lock_product_request
+
+        async with self.session_maker() as session:
+            product = await self._product(session)
+            inpost_curator = await self._user(session, 15012, "InPost Curator")
+            await self._inpost_curator(session, inpost_curator)
+            request = await admin_create_product_request(
+                self._inpost_add_variant_body(product),
+                actor=inpost_curator,
+                session=session,
+            )
+
+            with self.assertRaises(ApiError) as raised:
+                await lock_product_request(request.id, actor=inpost_curator, session=session)
 
         self.assertEqual(raised.exception.status_code, 403)
         self.assertEqual(raised.exception.code, ErrorCode.PRODUCT_REQUEST_REVIEW_PERMISSION_DENIED)
@@ -581,6 +633,61 @@ class ProductRequestsContractTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(approved.status, "approved")
         self.assertEqual(approved.reviewer_tg_id, self.admin_tg_id)
 
+    async def test_project_admin_approval_of_inpost_add_stock_updates_inpost_stock_only(self):
+        from webapp.services.product_request_lifecycle import lock_product_request
+
+        async with self.session_maker() as session:
+            product = await self._product(session)
+            variant = await self._variant(session, product)
+            curator = await self._user(session, 15008, "InPost Curator")
+            await self._inpost_curator(session, curator)
+            request = await admin_create_product_request(
+                self._inpost_add_stock_body(product, variant, quantity=4),
+                actor=curator,
+                session=session,
+            )
+
+            await lock_product_request(request.id, actor=self.admin_actor, session=session)
+            approved = await admin_approve_product_request(request.id, actor=self.admin_actor, session=session)
+            inpost_stock = await session.scalar(select(InpostStock).where(InpostStock.variant_id == variant.id))
+            local_stock = await session.scalar(select(LocationStock).where(LocationStock.variant_id == variant.id))
+
+        self.assertEqual(approved.source_type, "inpost")
+        self.assertEqual(approved.status, "approved")
+        self.assertIsNotNone(inpost_stock)
+        self.assertEqual(inpost_stock.quantity, 4)
+        self.assertIsNone(local_stock)
+
+    async def test_project_admin_approval_of_inpost_add_variant_creates_variant_and_inpost_stock(self):
+        from webapp.services.product_request_lifecycle import lock_product_request
+
+        async with self.session_maker() as session:
+            product = await self._product(session)
+            curator = await self._user(session, 15009, "InPost Curator")
+            await self._inpost_curator(session, curator)
+            request = await admin_create_product_request(
+                self._inpost_add_variant_body(product, quantity=6),
+                actor=curator,
+                session=session,
+            )
+
+            await lock_product_request(request.id, actor=self.admin_actor, session=session)
+            approved = await admin_approve_product_request(request.id, actor=self.admin_actor, session=session)
+            variant = await session.get(ProductVariant, approved.published_variant_id)
+            inpost_stock = await session.scalar(
+                select(InpostStock).where(InpostStock.variant_id == approved.published_variant_id)
+            )
+            local_stock = await session.scalar(
+                select(LocationStock).where(LocationStock.variant_id == approved.published_variant_id)
+            )
+
+        self.assertEqual(approved.source_type, "inpost")
+        self.assertIsNotNone(variant)
+        self.assertEqual(variant.name_ru, "Warehouse Mint")
+        self.assertIsNotNone(inpost_stock)
+        self.assertEqual(inpost_stock.quantity, 6)
+        self.assertIsNone(local_stock)
+
     async def test_city_curator_cannot_approve_request_in_unassigned_city(self):
         async with self.session_maker() as session:
             _, location = await self._city_location(session, "Warsaw")
@@ -809,6 +916,32 @@ class ProductRequestsContractTest(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(changed.reject_reason)
         self.assertIsNone(changed.locked_by_tg_id)
         self.assertIsNone(changed.locked_at)
+
+    async def test_project_admin_can_need_changes_inpost_request(self):
+        from webapp.services.product_request_lifecycle import lock_product_request
+
+        async with self.session_maker() as session:
+            product = await self._product(session)
+            curator = await self._user(session, 15013, "InPost Curator")
+            await self._inpost_curator(session, curator)
+            request = await admin_create_product_request(
+                self._inpost_add_variant_body(product),
+                actor=curator,
+                session=session,
+            )
+            await lock_product_request(request.id, actor=self.admin_actor, session=session)
+
+            changed = await admin_request_product_request_changes(
+                request.id,
+                RejectProductRequestRequest(comment="Fix warehouse quantity"),
+                actor=self.admin_actor,
+                session=session,
+            )
+
+        self.assertEqual(changed.source_type, "inpost")
+        self.assertEqual(changed.status, "need_changes")
+        self.assertEqual(changed.review_comment, "Fix warehouse quantity")
+        self.assertIsNone(changed.locked_by_tg_id)
 
     async def test_request_changes_empty_comment_returns_comment_required(self):
         from webapp.services.product_request_lifecycle import lock_product_request
@@ -1156,6 +1289,37 @@ class ProductRequestsContractTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(edited.status, "pending_review")
         self.assertEqual(edited.quantity, 9)
+
+    async def test_inpost_curator_can_edit_unlocked_need_changes_inpost_request(self):
+        from webapp.services.product_request_lifecycle import edit_product_request, lock_product_request
+
+        async with self.session_maker() as session:
+            product = await self._product(session)
+            curator = await self._user(session, 15014, "InPost Curator")
+            await self._inpost_curator(session, curator)
+            request = await admin_create_product_request(
+                self._inpost_add_variant_body(product),
+                actor=curator,
+                session=session,
+            )
+            await lock_product_request(request.id, actor=self.admin_actor, session=session)
+            await admin_request_product_request_changes(
+                request.id,
+                RejectProductRequestRequest(comment="Fix InPost request"),
+                actor=self.admin_actor,
+                session=session,
+            )
+
+            edited = await edit_product_request(
+                request.id,
+                UpdateProductRequestReviewRequest(quantity=7),
+                actor=curator,
+                session=session,
+            )
+
+        self.assertEqual(edited.source_type, "inpost")
+        self.assertEqual(edited.status, "pending_review")
+        self.assertEqual(edited.quantity, 7)
 
     async def test_another_point_manager_cannot_edit_need_changes_request(self):
         from webapp.services.product_request_lifecycle import edit_product_request
