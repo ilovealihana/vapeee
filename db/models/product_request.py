@@ -13,6 +13,10 @@ PRODUCT_REQUEST_ADD_VARIANT = "ADD_VARIANT"
 PRODUCT_REQUEST_ADD_STOCK = "ADD_STOCK"
 PRODUCT_REQUEST_TYPES = {PRODUCT_REQUEST_ADD_VARIANT, PRODUCT_REQUEST_ADD_STOCK}
 
+PRODUCT_REQUEST_SOURCE_LOCAL_POINT = "local_point"
+PRODUCT_REQUEST_SOURCE_INPOST = "inpost"
+PRODUCT_REQUEST_SOURCES = {PRODUCT_REQUEST_SOURCE_LOCAL_POINT, PRODUCT_REQUEST_SOURCE_INPOST}
+
 PRODUCT_REQUEST_PENDING_REVIEW = "pending_review"
 PRODUCT_REQUEST_NEED_CHANGES = "need_changes"
 PRODUCT_REQUEST_APPROVED = "approved"
@@ -44,10 +48,26 @@ class ProductRequest(Base):
             "status IN ('pending_review', 'need_changes', 'approved', 'rejected')",
             name="ck_product_requests_status",
         ),
+        CheckConstraint(
+            "source_type IN ('local_point', 'inpost')",
+            name="ck_product_requests_source_type",
+        ),
+        CheckConstraint(
+            "(source_type = 'local_point' AND city_id IS NOT NULL AND location_id IS NOT NULL) OR "
+            "(source_type = 'inpost' AND city_id IS NULL AND location_id IS NULL)",
+            name="ck_product_requests_source_target",
+        ),
         CheckConstraint("quantity > 0", name="ck_product_requests_positive_quantity"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    source_type: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default=PRODUCT_REQUEST_SOURCE_LOCAL_POINT,
+        server_default=PRODUCT_REQUEST_SOURCE_LOCAL_POINT,
+        index=True,
+    )
     request_type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     status: Mapped[str] = mapped_column(
         String(32),
@@ -60,9 +80,11 @@ class ProductRequest(Base):
         Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
     requester_tg_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
-    city_id: Mapped[int] = mapped_column(Integer, ForeignKey("cities.id", ondelete="RESTRICT"), nullable=False, index=True)
-    location_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("locations.id", ondelete="RESTRICT"), nullable=False, index=True
+    city_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("cities.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
+    location_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("locations.id", ondelete="RESTRICT"), nullable=True, index=True
     )
     product_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("products.id", ondelete="RESTRICT"), nullable=False, index=True
@@ -90,8 +112,8 @@ class ProductRequest(Base):
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     requester: Mapped["User | None"] = relationship("User", lazy="selectin")
-    city: Mapped["City"] = relationship("City", lazy="selectin")
-    location: Mapped["Location"] = relationship("Location", lazy="selectin")
+    city: Mapped["City | None"] = relationship("City", lazy="selectin")
+    location: Mapped["Location | None"] = relationship("Location", lazy="selectin")
     product: Mapped["Product"] = relationship("Product", foreign_keys=[product_id], lazy="selectin")
     variant: Mapped["ProductVariant | None"] = relationship(
         "ProductVariant", foreign_keys=[variant_id], lazy="selectin"

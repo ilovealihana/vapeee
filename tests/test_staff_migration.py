@@ -148,6 +148,16 @@ class StaffMigrationTest(unittest.TestCase):
                 engine.dispose()
             os.unlink(db_path)
 
+    def test_product_requests_support_source_type_and_nullable_inpost_target(self):
+        import db.models  # noqa: F401
+        from db.session import Base
+
+        columns = Base.metadata.tables["product_requests"].c
+
+        self.assertIn("source_type", columns)
+        self.assertTrue(columns["city_id"].nullable)
+        self.assertTrue(columns["location_id"].nullable)
+
 
 if __name__ == "__main__":
     unittest.main()
