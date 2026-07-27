@@ -86,7 +86,7 @@ function adminGoogleMapsKey(): string {
 function ensureGooglePlacesScript(): Promise<void> {
   const win = adminGoogleWindow();
   if (!win) return Promise.reject(new Error('window unavailable'));
-  if (win.google?.maps?.places?.AutocompleteSuggestion || win.google?.maps?.places?.Autocomplete) return Promise.resolve();
+  if (win.google?.maps?.places?.AutocompleteSuggestion) return Promise.resolve();
   if (win.google?.maps?.importLibrary) {
     return win.google.maps.importLibrary('places').then((library) => {
       if (library.Autocomplete && win.google?.maps) {
@@ -183,7 +183,7 @@ export default function AdminCities() {
     ensureGooglePlacesScript()
       .then(async () => {
         const win = adminGoogleWindow();
-        if (!win?.google?.maps?.places?.AutocompleteSuggestion && !win?.google?.maps?.places?.Autocomplete && win?.google?.maps?.importLibrary) {
+        if (!win?.google?.maps?.places?.AutocompleteSuggestion && win?.google?.maps?.importLibrary) {
           const library = await win.google.maps.importLibrary('places');
           if (library.Autocomplete && win.google?.maps) {
             win.google.maps.places = { ...win.google.maps.places, Autocomplete: library.Autocomplete };
@@ -242,7 +242,7 @@ export default function AdminCities() {
 
     let cancelled = false;
     const timer = window.setTimeout(() => {
-      fetchAutocompleteSuggestions({ input, includedRegionCodes: ['pl'] })
+      fetchAutocompleteSuggestions({ input, includedRegionCodes: ['PL'] })
         .then((result) => {
           if (!cancelled) setAddressSuggestions(normalizeGoogleSuggestions(result).slice(0, 5));
         })
