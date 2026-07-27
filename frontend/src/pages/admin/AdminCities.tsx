@@ -524,31 +524,33 @@ export default function AdminCities() {
           <div className="input-group"><label className="input-label">{t('admin.fields.name')}</label><input className="input" value={locForm.name} onChange={e => setLocForm(f => ({ ...f, name: e.target.value }))} /></div>
           <div className="input-group admin-address-field">
             <label className="input-label">{t('admin.fields.address')}</label>
-            <input
-              className="input"
-              ref={locAddressInputRef}
-              value={locForm.address}
-              onChange={e => {
-                const address = e.target.value;
-                setLocForm(f => ({ ...f, address }));
-                setAddressStatus(address.trim() ? 'manual' : 'idle');
-                setAddressDebug('');
-              }}
-              placeholder={t('admin.cities.addressPlaceholder')}
-            />
+            <div className="admin-address-input-wrap">
+              <input
+                className="input"
+                ref={locAddressInputRef}
+                value={locForm.address}
+                onChange={e => {
+                  const address = e.target.value;
+                  setLocForm(f => ({ ...f, address }));
+                  setAddressStatus(address.trim() ? 'manual' : 'idle');
+                  setAddressDebug('');
+                }}
+                placeholder={t('admin.cities.addressPlaceholder')}
+              />
+              {addressSuggestions.length > 0 && (
+                <div className="admin-address-suggestions">
+                  {addressSuggestions.map((suggestion, index) => (
+                    <button className="admin-address-suggestion" type="button" key={`${addressSuggestionLabel(suggestion)}-${index}`} onClick={() => chooseAddressSuggestion(suggestion)}>
+                      <span>{addressSuggestionMain(suggestion)}</span>
+                      {addressSuggestionSecondary(suggestion) && <small>{addressSuggestionSecondary(suggestion)}</small>}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <p className={`admin-address-helper is-${addressStatus}`}>{t(`admin.cities.addressHints.${addressStatus}`)}</p>
             {addressStatus === 'unavailable' && addressDebug && (
               <p className="admin-address-debug">{t('admin.cities.addressDebug').replace('{reason}', addressDebug)}</p>
-            )}
-            {addressSuggestions.length > 0 && (
-              <div className="admin-address-suggestions">
-                {addressSuggestions.map((suggestion, index) => (
-                  <button className="admin-address-suggestion" type="button" key={`${addressSuggestionLabel(suggestion)}-${index}`} onClick={() => chooseAddressSuggestion(suggestion)}>
-                    <span>{addressSuggestionMain(suggestion)}</span>
-                    {addressSuggestionSecondary(suggestion) && <small>{addressSuggestionSecondary(suggestion)}</small>}
-                  </button>
-                ))}
-              </div>
             )}
           </div>
           <div className="input-group"><label className="input-label">{t('admin.fields.description')}</label><input className="input" value={locForm.description} onChange={e => setLocForm(f => ({ ...f, description: e.target.value }))} /></div>

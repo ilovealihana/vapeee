@@ -256,9 +256,13 @@ test('admin location form uses Google Places autocomplete for address suggestion
   assert.match(citiesSource, /placeholder=\{t\('admin\.cities\.addressPlaceholder'\)\}/);
   assert.match(citiesSource, /className=\{`admin-address-helper is-\$\{addressStatus\}`\}/);
   assert.match(citiesSource, /t\(`admin\.cities\.addressHints\.\$\{addressStatus\}`\)/);
+  assert.match(citiesSource, /className="admin-address-input-wrap"/);
   assert.match(css, /\.admin-address-suggestions\s*\{[\s\S]*position:\s*absolute;[\s\S]*z-index:\s*10001;/);
+  assert.match(css, /\.admin-address-suggestions\s*\{[\s\S]*top:\s*calc\(100% - 1px\);/);
+  assert.match(css, /\.admin-address-suggestions\s*\{[\s\S]*max-height:\s*190px;[\s\S]*overflow-y:\s*auto;/);
+  assert.match(css, /\.admin-address-suggestions\s*\{[\s\S]*overscroll-behavior:\s*contain;/);
   assert.match(css, /\.admin-address-suggestion\s*\{[\s\S]*background:\s*transparent;/);
-  assert.match(css, /\.pac-container\s*\{[\s\S]*z-index:\s*10000\s*!important;[\s\S]*background:\s*#151515;/);
+  assert.match(css, /\.pac-container\s*\{[\s\S]*z-index:\s*10000\s*!important;[\s\S]*margin-top:\s*0;[\s\S]*background:\s*#151515;/);
   assert.match(css, /\.pac-item\s*\{[\s\S]*color:\s*var\(--secondary\);/);
   assert.match(css, /\.pac-item-query\s*\{[\s\S]*color:\s*var\(--primary\);/);
 });
