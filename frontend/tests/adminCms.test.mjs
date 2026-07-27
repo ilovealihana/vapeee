@@ -235,7 +235,10 @@ test('admin location form uses Google Places autocomplete for address suggestion
   assert.match(citiesSource, /if \(!win\?\.google\?\.maps\?\.places\?\.AutocompleteSuggestion && win\?\.google\?\.maps\?\.importLibrary\)/);
   assert.match(citiesSource, /AutocompleteSuggestion/);
   assert.match(citiesSource, /fetchAutocompleteSuggestions/);
-  assert.match(citiesSource, /includedRegionCodes:\s*\['PL'\]/);
+  assert.match(citiesSource, /includedRegionCodes:\s*\['pl'\]/);
+  assert.match(citiesSource, /setAddressStatus\('unavailable'\)/);
+  assert.match(citiesSource, /prediction\?\.mainText\?\.text/);
+  assert.match(citiesSource, /prediction\?\.text\?\.toString\?\.\(\)/);
   assert.match(citiesSource, /const \[addressSuggestions,\s*setAddressSuggestions\] = useState<GoogleAddressSuggestion\[\]>\(\[\]\)/);
   assert.match(citiesSource, /chooseAddressSuggestion/);
   assert.match(citiesSource, /className="admin-address-suggestions"/);

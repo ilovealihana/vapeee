@@ -22,7 +22,9 @@ type GooglePlace = {
 };
 
 type GooglePlacePrediction = {
-  text?: { text?: string };
+  text?: { text?: string; toString?: () => string };
+  mainText?: { text?: string; toString?: () => string };
+  secondaryText?: { text?: string; toString?: () => string };
   structuredFormat?: {
     mainText?: { text?: string };
     secondaryText?: { text?: string };
@@ -128,11 +130,12 @@ function normalizeGoogleSuggestions(result: { suggestions?: GoogleAddressSuggest
 
 function addressSuggestionMain(suggestion: GoogleAddressSuggestion): string {
   const prediction = suggestion.placePrediction;
-  return prediction?.structuredFormat?.mainText?.text || prediction?.text?.text || '';
+  return prediction?.mainText?.text || prediction?.mainText?.toString?.() || prediction?.structuredFormat?.mainText?.text || prediction?.text?.text || prediction?.text?.toString?.() || '';
 }
 
 function addressSuggestionSecondary(suggestion: GoogleAddressSuggestion): string {
-  return suggestion.placePrediction?.structuredFormat?.secondaryText?.text || '';
+  const prediction = suggestion.placePrediction;
+  return prediction?.secondaryText?.text || prediction?.secondaryText?.toString?.() || prediction?.structuredFormat?.secondaryText?.text || '';
 }
 
 function addressSuggestionLabel(suggestion: GoogleAddressSuggestion): string {
@@ -243,12 +246,15 @@ export default function AdminCities() {
 
     let cancelled = false;
     const timer = window.setTimeout(() => {
-      fetchAutocompleteSuggestions({ input, includedRegionCodes: ['PL'] })
+      fetchAutocompleteSuggestions({ input, includedRegionCodes: ['pl'] })
         .then((result) => {
           if (!cancelled) setAddressSuggestions(normalizeGoogleSuggestions(result).slice(0, 5));
         })
         .catch(() => {
-          if (!cancelled) setAddressSuggestions([]);
+          if (!cancelled) {
+            setAddressSuggestions([]);
+            setAddressStatus('unavailable');
+          }
         });
     }, 180);
 
