@@ -197,6 +197,13 @@ test('product request action rules respect request source', async () => {
     );
 
     assert.equal(getProductRequestActions({
+      role: 'city_curator',
+      currentTgId: 300,
+      request: request({ source_type: 'inpost', locked_by_tg_id: 300 }),
+      isOwnEditableRequest: false,
+    }).canRelease, false);
+
+    assert.equal(getProductRequestActions({
       role: 'project_admin',
       currentTgId: 400,
       request: request({ source_type: 'inpost' }),

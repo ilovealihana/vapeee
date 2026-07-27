@@ -23,6 +23,7 @@ from webapp.routes.admin import (
     admin_create_product_request,
     admin_create_staff_member,
     admin_edit_product_request,
+    admin_get_product_request_options,
     admin_list_product_requests,
     admin_request_product_request_changes,
     admin_reject_product_request,
@@ -222,6 +223,27 @@ class ProductRequestsContractTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(created.source_type, "inpost")
         self.assertIsNone(created.city_id)
         self.assertIsNone(created.location_id)
+
+    async def test_product_request_options_match_create_permissions(self):
+        async with self.session_maker() as session:
+            city, location = await self._city_location(session)
+            await self._product(session)
+            manager = await self._user(session, 15020, "Manager")
+            city_curator = await self._user(session, 15021, "City Curator")
+            inpost_curator = await self._user(session, 15022, "InPost Curator")
+            await self._point_manager(session, manager, location)
+            await self._city_curator(session, city_curator, city)
+            await self._inpost_curator(session, inpost_curator)
+
+            manager_options = await admin_get_product_request_options(actor=manager, session=session)
+            city_curator_options = await admin_get_product_request_options(actor=city_curator, session=session)
+            inpost_options = await admin_get_product_request_options(actor=inpost_curator, session=session)
+            admin_options = await admin_get_product_request_options(actor=self.admin_actor, session=session)
+
+        self.assertEqual([source.source_type for source in manager_options.sources], ["local_point"])
+        self.assertEqual([source.source_type for source in city_curator_options.sources], [])
+        self.assertEqual([source.source_type for source in inpost_options.sources], ["inpost"])
+        self.assertEqual([source.source_type for source in admin_options.sources], ["inpost"])
 
     async def test_point_manager_cannot_create_inpost_request(self):
         async with self.session_maker() as session:

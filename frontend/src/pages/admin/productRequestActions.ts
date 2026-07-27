@@ -50,7 +50,7 @@ export function getProductRequestActions({
     canApprove: canReviewSource && isPending && ownsLock,
     canReject: canReviewSource && isPending && ownsLock,
     canRequestChanges: canReviewSource && isPending && ownsLock,
-    canRelease: isPending && (ownsLock || (isProjectAdmin && hasLock)),
+    canRelease: canReviewSource && isPending && (ownsLock || (isProjectAdmin && hasLock)),
     canEdit: isNeedChanges && isOwnEditableRequest && !hasLock,
   };
 }

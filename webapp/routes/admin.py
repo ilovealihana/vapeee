@@ -593,15 +593,6 @@ async def _ensure_inpost_curator_can_create(actor, session: AsyncSession) -> Non
     raise api_error(403, ErrorCode.PRODUCT_REQUEST_PERMISSION_DENIED, "InPost request access denied")
 
 
-async def _ensure_reviewer_can_review(actor, session: AsyncSession, city_id: int) -> None:
-    if await is_project_admin_user(actor, session):
-        return
-    member = await _active_staff_for_actor(actor, session)
-    if member and member.role == ROLE_CITY_CURATOR and city_id in _staff_city_ids(member):
-        return
-    raise api_error(403, ErrorCode.PRODUCT_REQUEST_REVIEW_PERMISSION_DENIED, "Review access denied")
-
-
 @router.get("/product-requests", response_model=list[ProductRequestSchema])
 async def admin_list_product_requests(
     mode: str | None = None,
@@ -675,7 +666,7 @@ async def admin_get_product_request_options(
     sources: list[ProductRequestSourceOption] = []
     if is_project_admin or (member and member.role == ROLE_INPOST_CURATOR):
         sources.append(ProductRequestSourceOption(source_type=PRODUCT_REQUEST_SOURCE_INPOST, label="InPost"))
-    if is_project_admin or (member and member.role in {ROLE_POINT_MANAGER, ROLE_CITY_CURATOR}):
+    if member and member.role == ROLE_POINT_MANAGER:
         sources.append(ProductRequestSourceOption(source_type=PRODUCT_REQUEST_SOURCE_LOCAL_POINT, label="Локальные точки"))
 
     location_q = (
