@@ -111,6 +111,18 @@ class ProductRequestsContractTest(unittest.IsolatedAsyncioTestCase):
             session=session,
         )
 
+    async def _inpost_curator(self, session, user: User):
+        await admin_create_staff_member(
+            CreateStaffMemberRequest(
+                tg_id=user.tg_id,
+                role="inpost_curator",
+                city_ids=[],
+                location_ids=[],
+            ),
+            actor=self.admin_actor,
+            session=session,
+        )
+
     def _add_variant_body(self, location: Location, product: Product, quantity=3) -> CreateProductRequestRequest:
         return CreateProductRequestRequest(
             request_type="ADD_VARIANT",
@@ -120,6 +132,19 @@ class ProductRequestsContractTest(unittest.IsolatedAsyncioTestCase):
             variant_name_pl="Blueberry",
             variant_name_uk="Blueberry",
             price_override=Decimal("21.50"),
+            quantity=quantity,
+        )
+
+    def _inpost_add_variant_body(self, product: Product, quantity=3) -> CreateProductRequestRequest:
+        return CreateProductRequestRequest(
+            source_type="inpost",
+            request_type="ADD_VARIANT",
+            location_id=None,
+            product_id=product.id,
+            variant_name_ru="Warehouse Mint",
+            variant_name_pl="Warehouse Mint",
+            variant_name_uk="Warehouse Mint",
+            price_override=Decimal("22.00"),
             quantity=quantity,
         )
 
@@ -152,6 +177,74 @@ class ProductRequestsContractTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(created.location_id, location.id)
         self.assertEqual(created.product_id, product.id)
         self.assertEqual(created.requester_tg_id, manager.tg_id)
+
+    async def test_inpost_curator_can_create_inpost_add_variant_request(self):
+        async with self.session_maker() as session:
+            product = await self._product(session)
+            curator = await self._user(session, 15001, "InPost Curator")
+            await self._inpost_curator(session, curator)
+
+            created = await admin_create_product_request(
+                self._inpost_add_variant_body(product, quantity=5),
+                actor=curator,
+                session=session,
+            )
+
+        self.assertEqual(created.source_type, "inpost")
+        self.assertEqual(created.request_type, "ADD_VARIANT")
+        self.assertEqual(created.status, "pending_review")
+        self.assertIsNone(created.city_id)
+        self.assertIsNone(created.location_id)
+        self.assertEqual(created.product_id, product.id)
+        self.assertEqual(created.requester_tg_id, curator.tg_id)
+
+    async def test_project_admin_can_create_inpost_request(self):
+        async with self.session_maker() as session:
+            product = await self._product(session)
+
+            created = await admin_create_product_request(
+                self._inpost_add_variant_body(product),
+                actor=self.admin_actor,
+                session=session,
+            )
+
+        self.assertEqual(created.source_type, "inpost")
+        self.assertIsNone(created.city_id)
+        self.assertIsNone(created.location_id)
+
+    async def test_point_manager_cannot_create_inpost_request(self):
+        async with self.session_maker() as session:
+            _, location = await self._city_location(session)
+            product = await self._product(session)
+            manager = await self._user(session, 15002, "Manager")
+            await self._point_manager(session, manager, location)
+
+            with self.assertRaises(ApiError) as raised:
+                await admin_create_product_request(
+                    self._inpost_add_variant_body(product),
+                    actor=manager,
+                    session=session,
+                )
+
+        self.assertEqual(raised.exception.status_code, 403)
+        self.assertEqual(raised.exception.code, ErrorCode.PRODUCT_REQUEST_PERMISSION_DENIED)
+
+    async def test_city_curator_cannot_create_inpost_request(self):
+        async with self.session_maker() as session:
+            city, _ = await self._city_location(session)
+            product = await self._product(session)
+            curator = await self._user(session, 15003, "Curator")
+            await self._city_curator(session, curator, city)
+
+            with self.assertRaises(ApiError) as raised:
+                await admin_create_product_request(
+                    self._inpost_add_variant_body(product),
+                    actor=curator,
+                    session=session,
+                )
+
+        self.assertEqual(raised.exception.status_code, 403)
+        self.assertEqual(raised.exception.code, ErrorCode.PRODUCT_REQUEST_PERMISSION_DENIED)
 
     async def test_point_manager_cannot_create_request_for_unassigned_location(self):
         async with self.session_maker() as session:
@@ -1464,6 +1557,80 @@ class ProductRequestsContractTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual({row.id for row in manager_rows}, {own_request.id})
         self.assertEqual({row.id for row in admin_rows}, {own_request.id, other_request.id})
         self.assertNotIn(other_request.id, {row.id for row in curator_rows})
+
+    async def test_inpost_curator_sees_inpost_requests_but_not_local_requests(self):
+        async with self.session_maker() as session:
+            _, location = await self._city_location(session)
+            product = await self._product(session)
+            manager = await self._user(session, 15004, "Manager")
+            inpost_curator = await self._user(session, 15005, "InPost Curator")
+            await self._point_manager(session, manager, location)
+            await self._inpost_curator(session, inpost_curator)
+            local_request = await admin_create_product_request(
+                self._add_variant_body(location, product),
+                actor=manager,
+                session=session,
+            )
+            inpost_request = await admin_create_product_request(
+                self._inpost_add_variant_body(product),
+                actor=inpost_curator,
+                session=session,
+            )
+
+            rows = await admin_list_product_requests(mode="active", actor=inpost_curator, session=session)
+
+        self.assertEqual({row.id for row in rows}, {inpost_request.id})
+        self.assertNotIn(local_request.id, {row.id for row in rows})
+
+    async def test_product_request_source_filter_limits_rows(self):
+        async with self.session_maker() as session:
+            _, location = await self._city_location(session)
+            product = await self._product(session)
+            manager = await self._user(session, 15006, "Manager")
+            inpost_curator = await self._user(session, 15007, "InPost Curator")
+            await self._point_manager(session, manager, location)
+            await self._inpost_curator(session, inpost_curator)
+            local_request = await admin_create_product_request(
+                self._add_variant_body(location, product),
+                actor=manager,
+                session=session,
+            )
+            inpost_request = await admin_create_product_request(
+                self._inpost_add_variant_body(product),
+                actor=inpost_curator,
+                session=session,
+            )
+
+            local_rows = await admin_list_product_requests(
+                mode="active",
+                source="local_point",
+                actor=self.admin_actor,
+                session=session,
+            )
+            inpost_rows = await admin_list_product_requests(
+                mode="active",
+                source="inpost",
+                actor=self.admin_actor,
+                session=session,
+            )
+            all_rows = await admin_list_product_requests(
+                mode="active",
+                source="all",
+                actor=self.admin_actor,
+                session=session,
+            )
+
+        self.assertEqual({row.id for row in local_rows}, {local_request.id})
+        self.assertEqual({row.id for row in inpost_rows}, {inpost_request.id})
+        self.assertEqual({row.id for row in all_rows}, {local_request.id, inpost_request.id})
+
+    async def test_list_invalid_source_returns_source_invalid(self):
+        async with self.session_maker() as session:
+            with self.assertRaises(ApiError) as raised:
+                await admin_list_product_requests(source="warehouse", actor=self.admin_actor, session=session)
+
+        self.assertEqual(raised.exception.status_code, 422)
+        self.assertEqual(raised.exception.code, ErrorCode.PRODUCT_REQUEST_SOURCE_INVALID)
 
     async def test_product_request_schema_review_comment_falls_back_to_reject_reason(self):
         async with self.session_maker() as session:

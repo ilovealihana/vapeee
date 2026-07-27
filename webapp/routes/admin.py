@@ -22,6 +22,9 @@ from db.models.product_request import (
     PRODUCT_REQUEST_ACTIVE_STATUSES,
     PRODUCT_REQUEST_FINAL_STATUSES,
     PRODUCT_REQUEST_PENDING_REVIEW,
+    PRODUCT_REQUEST_SOURCE_INPOST,
+    PRODUCT_REQUEST_SOURCE_LOCAL_POINT,
+    PRODUCT_REQUEST_SOURCES,
     PRODUCT_REQUEST_STATUSES,
     PRODUCT_REQUEST_TYPES,
     ProductRequest,
@@ -74,6 +77,7 @@ from webapp.schemas import (
     CreateStaffMemberRequest, UpdateStaffMemberRequest,
     AdminAccessSchema, StaffAssignmentSchema, StaffMemberSchema,
     CreateProductRequestRequest, ProductRequestLocationOption, ProductRequestOptions,
+    ProductRequestSourceOption,
     ProductRequestSchema, RejectProductRequestRequest, UpdateProductRequestReviewRequest,
 )
 
@@ -501,6 +505,7 @@ async def _load_product_request(session: AsyncSession, request_id: int) -> Produ
 def _product_request_schema(request: ProductRequest) -> ProductRequestSchema:
     return ProductRequestSchema(
         id=request.id,
+        source_type=request.source_type,
         request_type=request.request_type,
         status=request.status,
         requester_user_id=request.requester_user_id,
@@ -579,6 +584,15 @@ async def _ensure_point_manager_can_create(actor, session: AsyncSession, locatio
         raise api_error(403, ErrorCode.PRODUCT_REQUEST_LOCATION_FORBIDDEN, "Local Point is not assigned")
 
 
+async def _ensure_inpost_curator_can_create(actor, session: AsyncSession) -> None:
+    if await is_project_admin_user(actor, session):
+        return
+    member = await _active_staff_for_actor(actor, session)
+    if member and member.role == ROLE_INPOST_CURATOR:
+        return
+    raise api_error(403, ErrorCode.PRODUCT_REQUEST_PERMISSION_DENIED, "InPost request access denied")
+
+
 async def _ensure_reviewer_can_review(actor, session: AsyncSession, city_id: int) -> None:
     if await is_project_admin_user(actor, session):
         return
@@ -592,6 +606,7 @@ async def _ensure_reviewer_can_review(actor, session: AsyncSession, city_id: int
 async def admin_list_product_requests(
     mode: str | None = None,
     status: str | None = None,
+    source: str | None = None,
     actor=Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
@@ -599,6 +614,8 @@ async def admin_list_product_requests(
         raise api_error(422, ErrorCode.PRODUCT_REQUEST_STATUS_INVALID, "Product request mode is invalid")
     if status is not None and status not in PRODUCT_REQUEST_STATUSES:
         raise api_error(422, ErrorCode.PRODUCT_REQUEST_STATUS_INVALID, "Product request status is invalid")
+    if source is not None and source not in {"all", PRODUCT_REQUEST_SOURCE_LOCAL_POINT, PRODUCT_REQUEST_SOURCE_INPOST}:
+        raise api_error(422, ErrorCode.PRODUCT_REQUEST_SOURCE_INVALID, "Product request source is invalid")
 
     q = (
         select(ProductRequest)
@@ -620,15 +637,25 @@ async def admin_list_product_requests(
         allowed_statuses = {status} if allowed_statuses is None else allowed_statuses & {status}
     if allowed_statuses is not None:
         q = q.where(ProductRequest.status.in_(allowed_statuses or {"__none__"}))
+    if source and source != "all":
+        q = q.where(ProductRequest.source_type == source)
 
     if not await is_project_admin_user(actor, session):
         member = await _active_staff_for_actor(actor, session)
         if member is None:
             raise api_error(403, ErrorCode.PRODUCT_REQUEST_PERMISSION_DENIED, "Product request access denied")
-        if member.role == ROLE_CITY_CURATOR:
-            q = q.where(ProductRequest.city_id.in_(_staff_city_ids(member) or {-1}))
+        if member.role == ROLE_INPOST_CURATOR:
+            q = q.where(ProductRequest.source_type == PRODUCT_REQUEST_SOURCE_INPOST)
+        elif member.role == ROLE_CITY_CURATOR:
+            q = q.where(
+                ProductRequest.source_type == PRODUCT_REQUEST_SOURCE_LOCAL_POINT,
+                ProductRequest.city_id.in_(_staff_city_ids(member) or {-1}),
+            )
         elif member.role == ROLE_POINT_MANAGER:
-            q = q.where(ProductRequest.location_id.in_(_staff_location_ids(member) or {-1}))
+            q = q.where(
+                ProductRequest.source_type == PRODUCT_REQUEST_SOURCE_LOCAL_POINT,
+                ProductRequest.location_id.in_(_staff_location_ids(member) or {-1}),
+            )
         else:
             raise api_error(403, ErrorCode.PRODUCT_REQUEST_PERMISSION_DENIED, "Product request access denied")
     result = await session.execute(q)
@@ -640,20 +667,30 @@ async def admin_get_product_request_options(
     actor=Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
+    is_project_admin = await is_project_admin_user(actor, session)
+    member = None if is_project_admin else await _active_staff_for_actor(actor, session)
+    if not is_project_admin and member is None:
+        raise api_error(403, ErrorCode.PRODUCT_REQUEST_PERMISSION_DENIED, "Product request access denied")
+
+    sources: list[ProductRequestSourceOption] = []
+    if is_project_admin or (member and member.role == ROLE_INPOST_CURATOR):
+        sources.append(ProductRequestSourceOption(source_type=PRODUCT_REQUEST_SOURCE_INPOST, label="InPost"))
+    if is_project_admin or (member and member.role in {ROLE_POINT_MANAGER, ROLE_CITY_CURATOR}):
+        sources.append(ProductRequestSourceOption(source_type=PRODUCT_REQUEST_SOURCE_LOCAL_POINT, label="Локальные точки"))
+
     location_q = (
         select(Location, City)
         .join(City, City.id == Location.city_id)
         .where(Location.is_active == True, City.is_active == True)
         .order_by(City.name, Location.name)
     )
-    if not await is_project_admin_user(actor, session):
-        member = await _active_staff_for_actor(actor, session)
-        if member is None:
-            raise api_error(403, ErrorCode.PRODUCT_REQUEST_PERMISSION_DENIED, "Product request access denied")
+    if not is_project_admin:
         if member.role == ROLE_CITY_CURATOR:
             location_q = location_q.where(Location.city_id.in_(_staff_city_ids(member) or {-1}))
         elif member.role == ROLE_POINT_MANAGER:
             location_q = location_q.where(Location.id.in_(_staff_location_ids(member) or {-1}))
+        elif member.role == ROLE_INPOST_CURATOR:
+            location_q = location_q.where(Location.id.in_({-1}))
         else:
             raise api_error(403, ErrorCode.PRODUCT_REQUEST_PERMISSION_DENIED, "Product request access denied")
 
@@ -669,7 +706,7 @@ async def admin_get_product_request_options(
         .order_by(Product.name_ru)
     )
     products = [ProductSchema.model_validate(product) for product in product_result.scalars().all()]
-    return ProductRequestOptions(locations=locations, products=products)
+    return ProductRequestOptions(sources=sources, locations=locations, products=products)
 
 
 @router.post("/product-requests", response_model=ProductRequestSchema)
@@ -682,8 +719,22 @@ async def admin_create_product_request(
         raise api_error(422, ErrorCode.PRODUCT_REQUEST_TYPE_INVALID, "Product request type is invalid")
     if body.quantity <= 0:
         raise api_error(422, ErrorCode.PRODUCT_REQUEST_QUANTITY_INVALID, "Quantity must be positive")
-    city, location = await _ensure_request_location(session, body.location_id)
-    await _ensure_point_manager_can_create(actor, session, location.id)
+    source_type = body.source_type or PRODUCT_REQUEST_SOURCE_LOCAL_POINT
+    if source_type not in PRODUCT_REQUEST_SOURCES:
+        raise api_error(422, ErrorCode.PRODUCT_REQUEST_SOURCE_INVALID, "Product request source is invalid")
+
+    if source_type == PRODUCT_REQUEST_SOURCE_INPOST:
+        if body.location_id is not None:
+            raise api_error(422, ErrorCode.PRODUCT_REQUEST_LOCATION_FORBIDDEN, "InPost request must not target a Local Point")
+        await _ensure_inpost_curator_can_create(actor, session)
+        city = None
+        location = None
+    else:
+        if body.location_id is None:
+            raise api_error(422, ErrorCode.PRODUCT_REQUEST_LOCATION_REQUIRED, "Local Point is required")
+        city, location = await _ensure_request_location(session, body.location_id)
+        await _ensure_point_manager_can_create(actor, session, location.id)
+
     await _ensure_active_product(session, body.product_id)
 
     if body.request_type == PRODUCT_REQUEST_ADD_STOCK:
@@ -695,12 +746,13 @@ async def admin_create_product_request(
         variant_name_uk = _clean_variant_name(body.variant_name_uk or variant_name_ru)
 
     request = ProductRequest(
+        source_type=source_type,
         request_type=body.request_type,
         status=PRODUCT_REQUEST_PENDING_REVIEW,
         requester_user_id=getattr(actor, "id", None),
         requester_tg_id=actor.tg_id,
-        city_id=city.id,
-        location_id=location.id,
+        city_id=city.id if city else None,
+        location_id=location.id if location else None,
         product_id=body.product_id,
         variant_id=body.variant_id,
         variant_name_ru=variant_name_ru,

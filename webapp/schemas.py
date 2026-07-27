@@ -363,8 +363,9 @@ class StockRow(BaseModel):
     quantity: int
 
 class CreateProductRequestRequest(BaseModel):
+    source_type: str = "local_point"
     request_type: str
-    location_id: int
+    location_id: Optional[int] = None
     product_id: int
     variant_id: Optional[int] = None
     variant_name_ru: Optional[str] = None
@@ -399,13 +400,14 @@ class ProductRequestSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    source_type: str = "local_point"
     request_type: str
     status: str
     requester_user_id: Optional[int]
     requester_tg_id: int
-    city_id: int
+    city_id: Optional[int] = None
     city_name: Optional[str] = None
-    location_id: int
+    location_id: Optional[int] = None
     location_name: Optional[str] = None
     product_id: int
     product_name: Optional[str] = None
@@ -432,7 +434,13 @@ class ProductRequestLocationOption(BaseModel):
     city_name: str
     name: str
 
+class ProductRequestSourceOption(BaseModel):
+    source_type: str
+    label: str
+    available: bool = True
+
 class ProductRequestOptions(BaseModel):
+    sources: List[ProductRequestSourceOption] = []
     locations: List[ProductRequestLocationOption]
     products: List[ProductSchema]
 
