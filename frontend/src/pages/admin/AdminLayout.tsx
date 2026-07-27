@@ -6,7 +6,7 @@ import { useI18n } from '../../i18n';
 import { useUserStore } from '../../store/user';
 
 const tabs = [
-  { path: '/admin/product-requests', labelKey: 'admin.layout.tabs.productRequests', icon: 'tag' as const, roles: ['project_admin', 'city_curator', 'point_manager'] },
+  { path: '/admin/product-requests', labelKey: 'admin.layout.tabs.productRequests', icon: 'tag' as const, roles: ['project_admin', 'city_curator', 'point_manager', 'inpost_curator'] },
   { path: '/admin/cities', labelKey: 'admin.layout.tabs.cities', icon: 'mapPin' as const, roles: ['project_admin'] },
   { path: '/admin/products', labelKey: 'admin.layout.tabs.products', icon: 'package' as const, roles: ['project_admin'] },
   { path: '/admin/stock', labelKey: 'admin.layout.tabs.stock', icon: 'box' as const, roles: ['project_admin'] },

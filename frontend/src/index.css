@@ -3158,6 +3158,33 @@ textarea.input {
   color: #9bd7c6;
 }
 
+.admin-product-request-source-switch {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.admin-filter-label {
+  color: var(--secondary);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.admin-filter-count {
+  min-width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .08);
+  color: inherit;
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .admin-product-request-filter-divider {
   border-top: 1px solid var(--border);
   margin: 0 0 16px;

@@ -132,6 +132,11 @@ export default function AdminProductRequests() {
   );
   const selectedVariants = selectedProduct?.variants ?? [];
   const currentTgId = user?.tg_id;
+  const sourceCounts = useMemo(() => ({
+    all: requests.length,
+    inpost: requests.filter((request) => request.source_type === 'inpost').length,
+    local_point: requests.filter((request) => request.source_type === 'local_point').length,
+  }), [requests]);
 
   useEffect(() => {
     if (form.request_type !== 'ADD_STOCK') return;
@@ -361,6 +366,12 @@ export default function AdminProductRequests() {
     { value: 'inpost', label: t('admin.productRequests.sourceFilters.inpost') },
     { value: 'local_point', label: t('admin.productRequests.sourceFilters.localPoint') },
   ];
+  const visibleSourceFilters = sourceFilters.filter((filter) => (
+    adminRole === 'project_admin'
+    || filter.value === 'all'
+    || (adminRole === 'inpost_curator' && filter.value === 'inpost')
+    || ((adminRole === 'city_curator' || adminRole === 'point_manager') && filter.value === 'local_point')
+  ));
 
   return (
     <section>
@@ -397,17 +408,20 @@ export default function AdminProductRequests() {
 
       <div className="admin-product-request-filter-divider" aria-hidden="true" />
 
-      <div className="admin-filter-bar">
-        {sourceFilters.map((filter) => (
-          <button
-            key={filter.value}
-            className={`admin-button ${sourceFilter === filter.value ? 'admin-button-primary' : 'admin-button-secondary'}`}
-            type="button"
-            onClick={() => setSourceFilter(filter.value)}
-          >
-            {filter.label}
-          </button>
-        ))}
+      <div className="admin-product-request-source-switch">
+        <span className="admin-filter-label">{t('admin.productRequests.sourceFilters.title')}</span>
+        <div className="admin-filter-bar">
+          {visibleSourceFilters.map((filter) => (
+            <button
+              key={filter.value}
+              className={`admin-button ${sourceFilter === filter.value ? 'admin-button-primary' : 'admin-button-secondary'}`}
+              type="button"
+              onClick={() => setSourceFilter(filter.value)}
+            >
+              {filter.label}<span className="admin-filter-count">{sourceCounts[filter.value]}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
       {canCreate && (

@@ -518,6 +518,7 @@ const ru = {
         rejected: 'Отклоненные',
       },
       sourceFilters: {
+        title: 'Источник заявок',
         all: 'Все источники',
         inpost: 'InPost',
         localPoint: 'Локальные точки',

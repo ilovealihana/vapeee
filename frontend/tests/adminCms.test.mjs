@@ -49,6 +49,7 @@ test('admin layout is a separate CMS shell with readable navigation labels', () 
 
 test('admin product requests page is routed and uses cms/i18n patterns', () => {
   assert.match(layoutSource, /labelKey: 'admin\.layout\.tabs\.productRequests'/);
+  assert.match(layoutSource, /roles: \['project_admin', 'city_curator', 'point_manager', 'inpost_curator'\]/);
   assert.match(layoutSource, /adminRole === 'project_admin'/);
   assert.match(layoutSource, /tab\.roles\.includes\(adminRole as any\)/);
   assert.match(appSource, /import AdminProductRequests from '\.\/pages\/admin\/AdminProductRequests'/);
@@ -74,6 +75,9 @@ test('admin product requests page is routed and uses cms/i18n patterns', () => {
   assert.match(productRequestsSource, /adminApi\.getAccess/);
   assert.match(productRequestsSource, /type SourceFilter = 'all' \| 'local_point' \| 'inpost'/);
   assert.match(productRequestsSource, /adminApi\.getProductRequests\(\{ mode, status: selectedStatus, source: sourceFilter \}\)/);
+  assert.match(productRequestsSource, /className="admin-product-request-source-switch"/);
+  assert.match(productRequestsSource, /t\('admin\.productRequests\.sourceFilters\.title'\)/);
+  assert.match(productRequestsSource, /sourceCounts\[filter\.value\]/);
   assert.match(productRequestsSource, /admin\.productRequests\.sourceFilters\.inpost/);
   assert.match(productRequestsSource, /admin\.productRequests\.sourceLabels\.inpost/);
   assert.match(productRequestsSource, /form\.source_type === 'inpost'/);
