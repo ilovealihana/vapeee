@@ -377,6 +377,13 @@ const ru = {
       editLocationTitle: 'Редактировать точку',
       newLocationTitle: 'Новая точка',
       locationModalSubtitle: 'Эти данные используются для сценария самовывоза.',
+      addressPlaceholder: 'Начните вводить адрес в Польше',
+      addressHints: {
+        idle: 'Начните вводить адрес и выберите подсказку Google.',
+        selected: 'Адрес выбран из подсказки Google.',
+        manual: 'Выберите адрес из подсказки Google, чтобы точка точно попала на карту.',
+        unavailable: 'Подсказки Google сейчас недоступны. Адрес проверит сервер при сохранении.',
+      },
       managerAssigned: 'Менеджер: ID {id}',
       managerMissing: 'Нет менеджера',
     },

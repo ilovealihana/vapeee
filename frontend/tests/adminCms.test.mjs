@@ -226,14 +226,32 @@ test('admin city and product CRUD pages use i18n keys for visible labels', () =>
 
 test('admin location form uses Google Places autocomplete for address suggestions', () => {
   assert.match(citiesSource, /locAddressInputRef/);
+  assert.match(citiesSource, /const \[addressStatus,\s*setAddressStatus\] = useState<'idle' \| 'selected' \| 'manual' \| 'unavailable'>\('idle'\)/);
   assert.match(citiesSource, /VITE_GOOGLE_MAPS_API_KEY/);
   assert.match(citiesSource, /libraries=places/);
   assert.doesNotMatch(citiesSource, /loading=async/);
+  assert.match(citiesSource, /AutocompleteSuggestion/);
+  assert.match(citiesSource, /fetchAutocompleteSuggestions/);
+  assert.match(citiesSource, /includedRegionCodes:\s*\['pl'\]/);
+  assert.match(citiesSource, /const \[addressSuggestions,\s*setAddressSuggestions\] = useState<GoogleAddressSuggestion\[\]>\(\[\]\)/);
+  assert.match(citiesSource, /chooseAddressSuggestion/);
+  assert.match(citiesSource, /className="admin-address-suggestions"/);
+  assert.match(citiesSource, /formattedAddress/);
   assert.match(citiesSource, /maps\?\.places\?\.Autocomplete/);
   assert.match(citiesSource, /componentRestrictions:\s*\{\s*country:\s*'pl'\s*\}/);
   assert.match(citiesSource, /fields:\s*\['formatted_address', 'geometry', 'name'\]/);
   assert.match(citiesSource, /place_changed/);
   assert.match(citiesSource, /setLocForm\(f => \(\{ \.\.\.f, address \}\)\)/);
+  assert.match(citiesSource, /setAddressStatus\('selected'\)/);
+  assert.match(citiesSource, /setAddressStatus\(address\.trim\(\) \? 'manual' : 'idle'\)/);
+  assert.match(citiesSource, /placeholder=\{t\('admin\.cities\.addressPlaceholder'\)\}/);
+  assert.match(citiesSource, /className=\{`admin-address-helper is-\$\{addressStatus\}`\}/);
+  assert.match(citiesSource, /t\(`admin\.cities\.addressHints\.\$\{addressStatus\}`\)/);
+  assert.match(css, /\.admin-address-suggestions\s*\{[\s\S]*position:\s*absolute;[\s\S]*z-index:\s*10001;/);
+  assert.match(css, /\.admin-address-suggestion\s*\{[\s\S]*background:\s*transparent;/);
+  assert.match(css, /\.pac-container\s*\{[\s\S]*z-index:\s*10000\s*!important;[\s\S]*background:\s*#151515;/);
+  assert.match(css, /\.pac-item\s*\{[\s\S]*color:\s*var\(--secondary\);/);
+  assert.match(css, /\.pac-item-query\s*\{[\s\S]*color:\s*var\(--primary\);/);
 });
 
 test('admin stock and orders pages use i18n keys for visible labels', () => {

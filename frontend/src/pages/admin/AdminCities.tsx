@@ -16,6 +16,22 @@ const emptyLocation = { name: '', address: '', description: '' };
 type GooglePlace = {
   formatted_address?: string;
   name?: string;
+  formattedAddress?: string;
+  displayName?: string;
+  fetchFields?: (request: { fields: string[] }) => Promise<void>;
+};
+
+type GooglePlacePrediction = {
+  text?: { text?: string };
+  structuredFormat?: {
+    mainText?: { text?: string };
+    secondaryText?: { text?: string };
+  };
+  toPlace?: () => GooglePlace;
+};
+
+type GoogleAddressSuggestion = {
+  placePrediction?: GooglePlacePrediction;
 };
 
 type GoogleAutocompleteListener = {
@@ -35,13 +51,25 @@ type GooglePlacesAutocompleteCtor = new (
   },
 ) => GooglePlacesAutocomplete;
 
+type GoogleAutocompleteSuggestionService = {
+  fetchAutocompleteSuggestions: (
+    request: { input: string; includedRegionCodes: string[] },
+  ) => Promise<{ suggestions?: GoogleAddressSuggestion[] } | GoogleAddressSuggestion[]>;
+};
+
+type GooglePlacesLibrary = {
+  Autocomplete?: GooglePlacesAutocompleteCtor;
+  AutocompleteSuggestion?: GoogleAutocompleteSuggestionService;
+};
+
 type AdminGoogleWindow = Window & {
   google?: {
     maps?: {
       places?: {
         Autocomplete?: GooglePlacesAutocompleteCtor;
+        AutocompleteSuggestion?: GoogleAutocompleteSuggestionService;
       };
-      importLibrary?: (name: 'places') => Promise<{ Autocomplete?: GooglePlacesAutocompleteCtor }>;
+      importLibrary?: (name: 'places') => Promise<GooglePlacesLibrary>;
     };
   };
 };
@@ -58,11 +86,14 @@ function adminGoogleMapsKey(): string {
 function ensureGooglePlacesScript(): Promise<void> {
   const win = adminGoogleWindow();
   if (!win) return Promise.reject(new Error('window unavailable'));
-  if (win.google?.maps?.places?.Autocomplete) return Promise.resolve();
+  if (win.google?.maps?.places?.AutocompleteSuggestion || win.google?.maps?.places?.Autocomplete) return Promise.resolve();
   if (win.google?.maps?.importLibrary) {
     return win.google.maps.importLibrary('places').then((library) => {
       if (library.Autocomplete && win.google?.maps) {
         win.google.maps.places = { ...win.google.maps.places, Autocomplete: library.Autocomplete };
+      }
+      if (library.AutocompleteSuggestion && win.google?.maps) {
+        win.google.maps.places = { ...win.google.maps.places, AutocompleteSuggestion: library.AutocompleteSuggestion };
       }
     });
   }
@@ -90,6 +121,25 @@ function ensureGooglePlacesScript(): Promise<void> {
   });
 }
 
+function normalizeGoogleSuggestions(result: { suggestions?: GoogleAddressSuggestion[] } | GoogleAddressSuggestion[]): GoogleAddressSuggestion[] {
+  return Array.isArray(result) ? result : result.suggestions ?? [];
+}
+
+function addressSuggestionMain(suggestion: GoogleAddressSuggestion): string {
+  const prediction = suggestion.placePrediction;
+  return prediction?.structuredFormat?.mainText?.text || prediction?.text?.text || '';
+}
+
+function addressSuggestionSecondary(suggestion: GoogleAddressSuggestion): string {
+  return suggestion.placePrediction?.structuredFormat?.secondaryText?.text || '';
+}
+
+function addressSuggestionLabel(suggestion: GoogleAddressSuggestion): string {
+  const main = addressSuggestionMain(suggestion);
+  const secondary = addressSuggestionSecondary(suggestion);
+  return [main, secondary].filter(Boolean).join(', ');
+}
+
 export default function AdminCities() {
   const activeLocale = useUserStore((state) => state.activeLocale);
   const { t } = useI18n(activeLocale);
@@ -105,6 +155,9 @@ export default function AdminCities() {
   const [locCityId, setLocCityId] = useState<number>(0);
   const [editLoc, setEditLoc] = useState<AdminLocation | null>(null);
   const [locForm, setLocForm] = useState(emptyLocation);
+  const [addressStatus, setAddressStatus] = useState<'idle' | 'selected' | 'manual' | 'unavailable'>('idle');
+  const [placesReady, setPlacesReady] = useState(false);
+  const [addressSuggestions, setAddressSuggestions] = useState<GoogleAddressSuggestion[]>([]);
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
   const locAddressInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -130,15 +183,24 @@ export default function AdminCities() {
     ensureGooglePlacesScript()
       .then(async () => {
         const win = adminGoogleWindow();
-        if (!win?.google?.maps?.places?.Autocomplete && win?.google?.maps?.importLibrary) {
+        if (!win?.google?.maps?.places?.AutocompleteSuggestion && !win?.google?.maps?.places?.Autocomplete && win?.google?.maps?.importLibrary) {
           const library = await win.google.maps.importLibrary('places');
           if (library.Autocomplete && win.google?.maps) {
             win.google.maps.places = { ...win.google.maps.places, Autocomplete: library.Autocomplete };
           }
+          if (library.AutocompleteSuggestion && win.google?.maps) {
+            win.google.maps.places = { ...win.google.maps.places, AutocompleteSuggestion: library.AutocompleteSuggestion };
+          }
         }
         if (cancelled) return;
-        const Autocomplete = adminGoogleWindow()?.google?.maps?.places?.Autocomplete;
-        if (!Autocomplete) return;
+        const places = adminGoogleWindow()?.google?.maps?.places;
+        setPlacesReady(Boolean(places?.AutocompleteSuggestion));
+        if (places?.AutocompleteSuggestion) return;
+        const Autocomplete = places?.Autocomplete;
+        if (!Autocomplete) {
+          setAddressStatus('unavailable');
+          return;
+        }
         const autocomplete = new Autocomplete(input, {
           fields: ['formatted_address', 'geometry', 'name'],
           componentRestrictions: { country: 'pl' },
@@ -147,15 +209,53 @@ export default function AdminCities() {
           const place = autocomplete.getPlace();
           const address = place.formatted_address || place.name || input.value;
           setLocForm(f => ({ ...f, address }));
+          setAddressStatus('selected');
         });
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!cancelled) setAddressStatus('unavailable');
+      });
 
     return () => {
       cancelled = true;
       listener?.remove?.();
     };
   }, [showLocModal]);
+
+  useEffect(() => {
+    if (!showLocModal) {
+      setAddressSuggestions([]);
+      return undefined;
+    }
+
+    const input = locForm.address.trim();
+    if (!placesReady || addressStatus === 'selected' || input.length < 3) {
+      setAddressSuggestions([]);
+      return undefined;
+    }
+
+    const fetchAutocompleteSuggestions = adminGoogleWindow()?.google?.maps?.places?.AutocompleteSuggestion?.fetchAutocompleteSuggestions;
+    if (!fetchAutocompleteSuggestions) {
+      setAddressSuggestions([]);
+      return undefined;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      fetchAutocompleteSuggestions({ input, includedRegionCodes: ['pl'] })
+        .then((result) => {
+          if (!cancelled) setAddressSuggestions(normalizeGoogleSuggestions(result).slice(0, 5));
+        })
+        .catch(() => {
+          if (!cancelled) setAddressSuggestions([]);
+        });
+    }, 180);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [addressStatus, locForm.address, placesReady, showLocModal]);
 
   const loadLocations = async (cityId: number) => {
     try {
@@ -202,9 +302,31 @@ export default function AdminCities() {
       setShowLocModal(false);
       setEditLoc(null);
       setLocForm(emptyLocation);
+      setAddressStatus('idle');
+      setAddressSuggestions([]);
       await loadLocations(locCityId);
     } catch (e: any) {
       setError(e.message);
+    }
+  };
+
+  const chooseAddressSuggestion = async (suggestion: GoogleAddressSuggestion) => {
+    const prediction = suggestion.placePrediction;
+    const fallbackAddress = addressSuggestionLabel(suggestion);
+    try {
+      const place = prediction?.toPlace?.();
+      if (place?.fetchFields) await place.fetchFields({ fields: ['displayName', 'formattedAddress', 'location'] });
+      const address = place?.formattedAddress || place?.displayName || fallbackAddress;
+      if (!address) return;
+      setLocForm(f => ({ ...f, address }));
+      setAddressStatus('selected');
+      setAddressSuggestions([]);
+    } catch {
+      if (fallbackAddress) {
+        setLocForm(f => ({ ...f, address: fallbackAddress }));
+        setAddressStatus('manual');
+      }
+      setAddressSuggestions([]);
     }
   };
 
@@ -231,6 +353,8 @@ export default function AdminCities() {
       address: loc.address,
       description: loc.description || '',
     } : emptyLocation);
+    setAddressStatus(loc?.address ? 'selected' : 'idle');
+    setAddressSuggestions([]);
     setShowLocModal(true);
   };
 
@@ -360,7 +484,31 @@ export default function AdminCities() {
           footer={<button className="admin-button admin-button-primary" type="button" onClick={saveLoc}>{t('admin.common.save')}</button>}
         >
           <div className="input-group"><label className="input-label">{t('admin.fields.name')}</label><input className="input" value={locForm.name} onChange={e => setLocForm(f => ({ ...f, name: e.target.value }))} /></div>
-          <div className="input-group"><label className="input-label">{t('admin.fields.address')}</label><input className="input" ref={locAddressInputRef} value={locForm.address} onChange={e => setLocForm(f => ({ ...f, address: e.target.value }))} /></div>
+          <div className="input-group admin-address-field">
+            <label className="input-label">{t('admin.fields.address')}</label>
+            <input
+              className="input"
+              ref={locAddressInputRef}
+              value={locForm.address}
+              onChange={e => {
+                const address = e.target.value;
+                setLocForm(f => ({ ...f, address }));
+                setAddressStatus(address.trim() ? 'manual' : 'idle');
+              }}
+              placeholder={t('admin.cities.addressPlaceholder')}
+            />
+            <p className={`admin-address-helper is-${addressStatus}`}>{t(`admin.cities.addressHints.${addressStatus}`)}</p>
+            {addressSuggestions.length > 0 && (
+              <div className="admin-address-suggestions">
+                {addressSuggestions.map((suggestion, index) => (
+                  <button className="admin-address-suggestion" type="button" key={`${addressSuggestionLabel(suggestion)}-${index}`} onClick={() => chooseAddressSuggestion(suggestion)}>
+                    <span>{addressSuggestionMain(suggestion)}</span>
+                    {addressSuggestionSecondary(suggestion) && <small>{addressSuggestionSecondary(suggestion)}</small>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <div className="input-group"><label className="input-label">{t('admin.fields.description')}</label><input className="input" value={locForm.description} onChange={e => setLocForm(f => ({ ...f, description: e.target.value }))} /></div>
         </AdminModal>
       )}
